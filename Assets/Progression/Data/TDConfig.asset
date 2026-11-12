@@ -126,7 +126,7 @@ MonoBehaviour:
     range: 5
     fireRate: 0.5
     projectileSpeed: 9
-    areaRadius: 1.6
+    areaRadius: 2.6
     color: {r: 0.35, g: 0.35, b: 0.4, a: 1}
     onPath: 0
   - kind: 1

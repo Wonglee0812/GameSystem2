@@ -7,7 +7,7 @@ namespace PokerTD
     /// <summary>
     /// The cards stuck on one enemy. Each new card restarts a short timer; when the
     /// timer runs out (or 5 cards are on it) the best poker hand bursts for damage.
-    /// - The same card (same rank and suit) only marks once; hitting again only restarts the timer.
+    /// - The same card (same rank and suit) only marks once; hitting again does not restart the timer.
     /// - The timer gets shorter as more cards are on the enemy (config.markWait).
     /// - The burst uses the buffs of the tower that added the last card.
     /// - Every hit also does the card's own value as damage at once (Card.Value).
@@ -58,8 +58,8 @@ namespace PokerTD
             if (enemy == null || enemy.Health <= 0f) return;
             if (cards.Contains(card))
             {
-                timer = config.WaitAfter(cards.Count);   // same card: no new mark, the timer starts again
-                return;
+                if (config.sameCardResetsTimer) timer = config.WaitAfter(cards.Count);   // old rule
+                return;   // same card: no new mark, the burst timer keeps running
             }
             cards.Add(card);
             lastTower = from;

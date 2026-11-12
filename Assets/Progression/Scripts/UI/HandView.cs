@@ -20,6 +20,7 @@ namespace PokerTD.UI
         public float fanAngle = 4f;
 
         readonly List<CardView> views = new List<CardView>();
+        Button sortRank, sortSuit;
         Tower dropTarget;
 
         CardHand Hand => TDGame.Instance.Hand;
@@ -29,6 +30,8 @@ namespace PokerTD.UI
             template.gameObject.SetActive(false);
             Hand.Changed += Rebuild;
             discardButton.onClick.AddListener(() => Hand.Discard());
+            sortRank = SortButton("Sort: Rank", -40f, () => Hand.Sort(false));
+            sortSuit = SortButton("Sort: Suit", -200f, () => Hand.Sort(true));
             Rebuild();
         }
 
@@ -43,8 +46,28 @@ namespace PokerTD.UI
             bool show = game.Current == TDGame.Phase.Deploy && (BoardTransition.Instance == null || !BoardTransition.Instance.Busy);
             area.gameObject.SetActive(show);
             discardButton.gameObject.SetActive(show);
+            sortRank.gameObject.SetActive(show);
+            sortSuit.gameObject.SetActive(show);
             discardLabel.text = $"Discard  ({Hand.DiscardsLeft})";
             discardButton.interactable = Hand.DiscardsLeft > 0 && Hand.Selected.Count > 0;
+        }
+
+        /// <summary>A small copy of the discard button, in a row above it.</summary>
+        Button SortButton(string label, float x, UnityEngine.Events.UnityAction action)
+        {
+            var b = Instantiate(discardButton, discardButton.transform.parent);
+            b.name = label;
+            b.onClick.RemoveAllListeners();
+            b.onClick.AddListener(action);
+            b.interactable = true;
+            var rt = (RectTransform)b.transform;
+            var drt = (RectTransform)discardButton.transform;
+            rt.sizeDelta = new Vector2(150f, 60f);
+            rt.anchoredPosition = new Vector2(x, drt.anchoredPosition.y + drt.sizeDelta.y + 12f);
+            var t = b.GetComponentInChildren<TMP_Text>();
+            t.text = label; t.fontSize = 22f;
+            ((RectTransform)t.transform).sizeDelta = rt.sizeDelta;
+            return b;
         }
 
         void Rebuild()

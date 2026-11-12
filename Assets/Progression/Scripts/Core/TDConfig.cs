@@ -47,6 +47,25 @@ namespace PokerTD
 
         public enum TowerKind { Cannon, Gatling, Trap }
 
+        public enum BuffKind { AddChips, PercentChips, AddMult, XMult }
+
+        [Serializable]
+        public class BuffType
+        {
+            public BuffKind kind;
+            public string name;
+            [Tooltip("+Chips: flat chips. +%Chips: 0.25 = +25% of the chips so far. +Mult: added to mult. xMult: mult is multiplied by this.")]
+            public float value;
+            public int cost = 6;
+            public Color color = Color.white;
+
+            /// <summary>"+50 chips", "x1.5 mult" ...</summary>
+            public string Short =>
+                kind == BuffKind.AddChips ? $"+{value:0.#} chips" :
+                kind == BuffKind.PercentChips ? $"+{value * 100f:0}% chips" :
+                kind == BuffKind.AddMult ? $"+{value:0.#} mult" : $"x{value:0.##} mult";
+        }
+
         [Serializable]
         public class TowerType
         {
@@ -80,6 +99,10 @@ namespace PokerTD
         [Tooltip("Locked hands burst as High Card until they are unlocked.")]
         public bool useLocks = true;
 
+        [Header("Hands")]
+        [Tooltip("Cards needed for a Flush or a Straight. Each tower holds one card and the same card marks only once, so an enemy can carry at most (towers) different cards. 4 = like Balatro's Four Fingers joker.")]
+        [Range(4, 5)] public int flushStraightCards = 4;
+
         [Header("Marks")]
         [Tooltip("Seconds to wait for the next mark, by number of marks already on the enemy (1, 2, 3, 4). 5 marks burst at once.")]
         public float[] markWait = { 2f, 1.6f, 1.2f, 0.8f };
@@ -104,12 +127,40 @@ namespace PokerTD
         [Header("Towers")]
         public TowerType[] towers =
         {
-            new TowerType { kind = TowerKind.Cannon,  name = "Cannon",  cost = 6, range = 5f,   fireRate = 0.5f, projectileSpeed = 9f,  areaRadius = 1.6f, color = new Color(0.35f, 0.35f, 0.4f) },
+            new TowerType { kind = TowerKind.Cannon,  name = "Cannon",  cost = 6, range = 5f,   fireRate = 0.5f, projectileSpeed = 9f,  areaRadius = 2.6f, color = new Color(0.35f, 0.35f, 0.4f) },
             new TowerType { kind = TowerKind.Gatling, name = "Gatling", cost = 5, range = 4f,   fireRate = 3f,   projectileSpeed = 18f, color = new Color(0.8f, 0.65f, 0.25f) },
             new TowerType { kind = TowerKind.Trap,    name = "Trap",    cost = 4, range = 1.2f, fireRate = 1f,   areaRadius = 1.2f, color = new Color(0.6f, 0.25f, 0.6f), onPath = true },
         };
 
+        [Header("Buff machines (sheet Burst)")]
+        [Tooltip("Placeholder machines until the final list and rarity tiers are chosen. Values from sheet Burst.")]
+        public BuffType[] buffs =
+        {
+            new BuffType { kind = BuffKind.AddChips,     name = "+Chips",  value = 50f,   cost = 6, color = new Color(0.3f, 0.55f, 1f) },
+            new BuffType { kind = BuffKind.PercentChips, name = "+%Chips", value = 0.25f, cost = 7, color = new Color(0.3f, 0.85f, 0.9f) },
+            new BuffType { kind = BuffKind.AddMult,      name = "+Mult",   value = 4f,    cost = 6, color = new Color(1f, 0.35f, 0.3f) },
+            new BuffType { kind = BuffKind.XMult,        name = "xMult",   value = 1.5f,  cost = 9, color = new Color(0.95f, 0.3f, 0.75f) },
+        };
+        [Tooltip("Width of one ring around a buff machine, in world units (one tile = 2). Number of rings = tower limit.")]
+        public float ringWidth = 2.5f;
+        [Tooltip("On: ring 1 (applied first) is the inner ring, closest to the machine. Off: ring 1 is the outer ring.")]
+        public bool ringOneIsInner = true;
+        [Tooltip("How many buff machines the player may own (placed + waiting), like joker slots.")]
+        public int startMachineLimit = 5;
+        [Tooltip("Random machines offered in the shop after each wave.")]
+        public int shopMachineOffers = 3;
+        [Tooltip("Selling a placed machine gives back this part of its cost (Balatro: half).")]
+        [Range(0f, 1f)] public float sellBack = 0.5f;
+
         [Header("Turns")]
+        [Tooltip("Cards dealt each battle turn (Balatro hand size: 8).")]
+        public int baseHandSize = 8;
+        [Tooltip("Extra cards for each tower slot above the base hand size.")]
+        public int cardsPerExtraTower = 2;
+        [Tooltip("Off: a card that is already on the enemy does not restart its burst timer.")]
+        public bool sameCardResetsTimer = false;
+        [Tooltip("Towers aim first at enemies that do not carry their card yet.")]
+        public bool aimAtUnmarked = true;
         [Tooltip("Discards per battle turn (Balatro starts with 3).")]
         public int discardsPerTurn = 3;
         [Tooltip("How many towers may stand on the map at the start. More can be bought later.")]
@@ -129,6 +180,9 @@ namespace PokerTD
             foreach (var h in hands) if (h.hand == hand) return h;
             return hands[0];
         }
+
+        /// <summary>8 cards; above 8 tower slots, 2 more per slot.</summary>
+        public int HandSize(int towerLimit) => baseHandSize + cardsPerExtraTower * Mathf.Max(0, towerLimit - baseHandSize);
 
         public float WaitAfter(int marks) => marks <= 0 ? markWait[0] : markWait[Mathf.Min(marks, markWait.Length) - 1];
     }

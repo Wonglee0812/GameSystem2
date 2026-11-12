@@ -1,4 +1,7 @@
 ﻿<Solution>
+  <Project Path="WindPet.csproj" />
+  <Project Path="PokerTD.csproj" />
+  <Project Path="WindPet.Editor.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
-  <Project Path="Assembly-CSharp-Editor.csproj" />
+  <Project Path="PokerTD.Editor.csproj" />
 </Solution>

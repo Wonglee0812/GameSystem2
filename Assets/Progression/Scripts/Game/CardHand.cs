@@ -4,8 +4,8 @@ using System.Collections.Generic;
 namespace PokerTD
 {
     /// <summary>
-    /// The player's cards in the battle turn. At the start you get one card per tower
-    /// (traps too). Selected cards can be discarded and replaced from the deck, a few
+    /// The player's cards in the battle turn. At the start you get config.HandSize cards
+    /// (8, more when the tower limit goes above 8). Selected cards can be discarded and replaced from the deck, a few
     /// times per turn. Cards are then dragged onto towers; a tower keeps its card for
     /// the whole wave. A card dropped on a tower that already has one swaps with it.
     /// Cards still in hand when the wave starts are lost.
@@ -66,6 +66,15 @@ namespace PokerTD
             Cards.RemoveAt(index);
             if (tower.HasCard) Cards.Insert(index, tower.Card);
             tower.SetCard(card);
+            Selected.Clear();
+            Changed?.Invoke();
+        }
+
+        /// <summary>Sorts the hand: by rank (A high first) or by suit (then rank).</summary>
+        public void Sort(bool bySuit)
+        {
+            if (bySuit) Cards.Sort((a, b) => a.suit != b.suit ? a.suit.CompareTo(b.suit) : b.rank.CompareTo(a.rank));
+            else Cards.Sort((a, b) => a.rank != b.rank ? b.rank.CompareTo(a.rank) : a.suit.CompareTo(b.suit));
             Selected.Clear();
             Changed?.Invoke();
         }

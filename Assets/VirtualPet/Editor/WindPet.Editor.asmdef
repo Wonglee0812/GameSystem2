@@ -1,0 +1,10 @@
+{
+    "name": "WindPet.Editor",
+    "rootNamespace": "WindPet.EditorTools",
+    "references": ["WindPet", "Unity.TextMeshPro", "UnityEngine.UI", "Unity.InputSystem"],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

@@ -4,7 +4,8 @@ using System.Linq;
 namespace PokerTD
 {
     /// <summary>
-    /// Finds the best poker hand in 1-5 cards. Flush and straight need all 5 cards.
+    /// Finds the best poker hand in 1-5 cards. Flush and straight need
+    /// config.flushStraightCards cards (4 or 5): with 4 towers an enemy can never hold 5 different cards.
     /// A straight may use the ace low (A-2-3-4-5). Based on the grouping idea of the
     /// earlier EnemyCardHandler prototype, with the ace-low straight fixed.
     /// </summary>
@@ -14,9 +15,11 @@ namespace PokerTD
         {
             if (cards == null || cards.Count == 0) return HandType.HighCard;
             var groups = cards.GroupBy(c => c.rank).Select(g => g.Count()).OrderByDescending(n => n).ToList();
-            bool five = cards.Count == 5;
-            bool flush = five && cards.All(c => c.suit == cards[0].suit);
-            bool straight = five && groups.Count == 5 && IsRun(cards.Select(c => c.rank).OrderBy(r => r).ToList());
+            int need = TDGame.Instance != null ? TDGame.Instance.config.flushStraightCards : 5;
+            bool enough = cards.Count >= need;
+            // flush: 'need' cards of one suit; straight: 'need' different ranks in a row
+            bool flush = enough && cards.GroupBy(c => c.suit).Any(g => g.Count() >= need);
+            bool straight = enough && HasRun(cards.Select(c => c.rank).Distinct().ToList(), need);
 
             if (straight && flush) return HandType.StraightFlush;
             if (groups[0] == 4) return HandType.FourOfAKind;
@@ -29,11 +32,18 @@ namespace PokerTD
             return HandType.HighCard;
         }
 
-        static bool IsRun(List<int> sorted)
+        /// <summary>True when 'need' ranks follow each other. The ace counts high (14) and low (1).</summary>
+        static bool HasRun(List<int> ranks, int need)
         {
-            if (sorted[4] - sorted[0] == 4) return true;
-            // ace low: A-2-3-4-5 is sorted as 2,3,4,5,14
-            return sorted[4] == 14 && sorted[0] == 2 && sorted[3] == 5;
+            var set = new HashSet<int>(ranks);
+            if (set.Contains(14)) set.Add(1);
+            foreach (int start in set)
+            {
+                int n = 1;
+                while (set.Contains(start + n)) n++;
+                if (n >= need) return true;
+            }
+            return false;
         }
 
         public static string Name(HandType hand)

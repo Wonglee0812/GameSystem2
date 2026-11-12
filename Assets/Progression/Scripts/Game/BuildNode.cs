@@ -2,11 +2,13 @@ using UnityEngine;
 
 namespace PokerTD
 {
-    /// <summary>One tile of the map where a tower can stand. Path tiles only take traps.</summary>
+    /// <summary>One tile of the map where a tower or a buff machine can stand. Path tiles only take traps.</summary>
     public class BuildNode : MonoBehaviour
     {
         public bool isPath;
         public Tower tower;
+        public BuffMachine machine;
+        public bool IsFree => tower == null && machine == null;
 
         Renderer rend;
         MaterialPropertyBlock block;

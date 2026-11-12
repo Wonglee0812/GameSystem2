@@ -55,7 +55,7 @@ namespace PokerTD
                     Vector3 d = e.transform.position - lastPos; d.y = 0f;
                     if (d.magnitude <= from.Type.areaRadius) e.Marks.AddMark(card, from);
                 }
-                FloatText.Show("*", lastPos + Vector3.up, new Color(1f, 0.8f, 0.4f));
+                Blast.Show(lastPos, from.Type.areaRadius);
             }
             else if (target != null) target.Marks.AddMark(card, from);
             Destroy(gameObject);

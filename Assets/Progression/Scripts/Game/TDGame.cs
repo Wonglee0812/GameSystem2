@@ -31,6 +31,35 @@ namespace PokerTD
         /// <summary>How many towers may stand on the map.</summary>
         public int TowerLimit { get; private set; }
         public void RaiseTowerLimit(int amount = 1) { TowerLimit += amount; Changed?.Invoke(); }
+        /// <summary>How many buff machines may stand on the map.</summary>
+        public int MachineLimit { get; private set; }
+        public void RaiseMachineLimit(int amount = 1) { MachineLimit += amount; Changed?.Invoke(); }
+
+        /// <summary>Machines bought in the shop and not placed yet (placed in the Deploy phase).</summary>
+        public readonly List<TDConfig.BuffType> MachineStock = new List<TDConfig.BuffType>();
+        /// <summary>Random machines for sale in the current shop turn.</summary>
+        public readonly List<TDConfig.BuffType> Offers = new List<TDConfig.BuffType>();
+        public int MachinesOwned => MachineStock.Count + BuffMachine.All.Count;
+
+        public bool BuyOffer(int index)
+        {
+            if (Current != Phase.Shop || index < 0 || index >= Offers.Count || MachinesOwned >= MachineLimit) return false;
+            var buff = Offers[index];
+            if (!TrySpend(buff.cost)) return false;
+            MachineStock.Add(buff);
+            Offers.RemoveAt(index);
+            Changed?.Invoke();
+            return true;
+        }
+
+        public int SellValue(TDConfig.BuffType buff) => Mathf.Max(1, Mathf.FloorToInt(buff.cost * config.sellBack));
+
+        void RollOffers()
+        {
+            Offers.Clear();
+            for (int i = 0; i < config.shopMachineOffers; i++)
+                Offers.Add(config.buffs[UnityEngine.Random.Range(0, config.buffs.Length)]);
+        }
 
         readonly Dictionary<HandType, int> levels = new Dictionary<HandType, int>();
         readonly HashSet<HandType> unlocked = new HashSet<HandType>();
@@ -41,6 +70,7 @@ namespace PokerTD
             Lives = config.startLives;
             Gold = config.startGold;
             TowerLimit = config.startTowerLimit;
+            MachineLimit = config.startMachineLimit;
             foreach (var h in config.hands) if (!h.startsLocked) unlocked.Add(h.hand);
         }
 
@@ -78,7 +108,7 @@ namespace PokerTD
         void BeginDeploy()
         {
             Current = Phase.Deploy;
-            Hand.Deal(Tower.All.Count, config.discardsPerTurn);
+            Hand.Deal(config.HandSize(TowerLimit), config.discardsPerTurn);
             Changed?.Invoke();
         }
 
@@ -105,6 +135,7 @@ namespace PokerTD
             WaveNumber++;
             Current = Phase.Shop;
             foreach (var t in Tower.All) t.ClearCard();
+            RollOffers();
             Changed?.Invoke();
             BoardTransition.Instance.Sink();
         }

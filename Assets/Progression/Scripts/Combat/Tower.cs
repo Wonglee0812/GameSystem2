@@ -24,6 +24,7 @@ namespace PokerTD
         Transform turret;
         TextMeshPro label;
         float cooldown;
+        readonly Dictionary<Enemy, float> lastShot = new Dictionary<Enemy, float>();
         float stunnedUntil;
         Material material;
         RangeRing ring;
@@ -147,16 +148,38 @@ namespace PokerTD
             if (dir.sqrMagnitude > 0.001f) turret.rotation = Quaternion.Slerp(turret.rotation, Quaternion.LookRotation(dir), 12f * Time.deltaTime);
             if (cooldown > 0f) return;
             cooldown = 1f / Type.fireRate;
+            lastShot[target] = Time.time;
             Projectile.Fire(this, target, material);
         }
 
-        /// <summary>The enemy in range that is furthest along the path.</summary>
+        /// <summary>
+        /// The enemy in range that does not carry this tower's card yet, furthest along the path.
+        /// When every enemy in range already has it: round robin, the enemy this tower shot
+        /// longest ago (so it goes back to the first one, then the next...).
+        /// </summary>
         Enemy Target()
         {
-            Enemy best = null;
+            Enemy furthest = null, fresh = null, oldest = null;
+            float oldestTime = float.MaxValue;
+            bool spread = TDGame.Instance.config.aimAtUnmarked;
             foreach (var e in Enemy.All)
-                if (Flat(e.transform.position - transform.position) <= Type.range && (best == null || e.Progress > best.Progress)) best = e;
-            return best;
+            {
+                if (Flat(e.transform.position - transform.position) > Type.range) continue;
+                if (furthest == null || e.Progress > furthest.Progress) furthest = e;
+                if (!spread) continue;
+                if (!Carries(e) && (fresh == null || e.Progress > fresh.Progress)) fresh = e;
+                float t = lastShot.TryGetValue(e, out float s) ? s : -1f;
+                if (t < oldestTime || (Mathf.Approximately(t, oldestTime) && e.Progress > oldest.Progress)) { oldestTime = t; oldest = e; }
+            }
+            if (!spread) return furthest;
+            if (lastShot.Count > 64) lastShot.Clear();
+            return fresh != null ? fresh : oldest;
+        }
+
+        bool Carries(Enemy e)
+        {
+            foreach (var c in e.Marks.Cards) if (c.Equals(Card)) return true;
+            return false;
         }
 
         void Pulse() => FloatText.Show(Card.ToString(), transform.position + Vector3.up * 0.6f, new Color(0.85f, 0.6f, 1f, 0.8f));
