@@ -1,0 +1,95 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 36b0e127b6b7ceb4f9318b8a67e100aa, type: 3}
+  m_Name: WorkConfig
+  m_EditorClassIdentifier: Assembly-CSharp::WindPet.WorkConfig
+  startElectricity: 5
+  lightsKwhPerSecond: 0.01
+  lightsEuroPerSecond: 0.02
+  darkLevel: 0.25
+  kwhPerSecond: 0.08
+  tiredOutput: 0.5
+  energeticOutput: 1.25
+  stormOutput: 3
+  wearPerSecond: 0.05
+  stormWear: 8
+  turbinePrice: 15
+  maxTurbineLevel: 5
+  upgradeBaseCost: 20
+  upgradeCostGrowth: 1.5
+  levelGrowth: 1.5
+  outputGrowth: 1.8
+  workEnergy: 0.35
+  workFullness: 0.1
+  workMood: 0.15
+  printEvery: {x: 8, y: 15}
+  maxBillsOnDesk: 6
+  buttonCharges: 3
+  buttonRecharge: 20
+  bigOrderChance: 0.15
+  kwhRange: {x: 1, y: 5}
+  billScale: 1.5
+  fairEuroPerKwh: 1
+  priceSpread: 1
+  euroPerKwhLimits: {x: 0.07, y: 15}
+  loanBase: 10
+  loanInterest: 0.1
+  loanRepayShare: 0.5
+  loanCooldown: 20
+  potions:
+  - name: Mood Tonic
+    model: Item_Potion2
+    bar: 2
+    amount: 30
+    duration: 0
+    price: 15
+  - name: Hearty Brew
+    model: Item_Potion0
+    bar: 1
+    amount: 40
+    duration: 0
+    price: 10
+  - name: Energy Elixir
+    model: Item_Potion3
+    bar: 0
+    amount: 40
+    duration: 0
+    price: 18
+  - name: Joy Draught
+    model: Item_Potion5
+    bar: 2
+    amount: 2
+    duration: 90
+    price: 30
+  - name: Feast Draught
+    model: Item_Potion6
+    bar: 1
+    amount: 2
+    duration: 90
+    price: 30
+  - name: Vigor Draught
+    model: Item_Potion4
+    bar: 0
+    amount: 2
+    duration: 90
+    price: 30
+  potionPriceFollowsLevel: 1
+  startHour: 8
+  secondsPerGameHour: 60
+  contractChance: 0.25
+  maxOpenContracts: 2
+  contractKwhMultiplier: 2
+  contractHours: {x: 2, y: 5}
+  finePerKwh: {x: 0.5, y: 1.5}
+  strikesBeforeBigFine: 3
+  bigFineShare: 0.8
+  inkPerPad: 5

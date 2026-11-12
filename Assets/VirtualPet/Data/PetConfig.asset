@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 76cf83bdb667ee44796017bfb470e239, type: 3}
+  m_Name: PetConfig
+  m_EditorClassIdentifier: Assembly-CSharp::WindPet.PetConfig
+  startEnergy: 80
+  startFullness: 70
+  startMood: 50
+  startTemperature: 50
+  startMoney: 20
+  sleepBelow: 10
+  tiredBelow: 40
+  energeticAbove: 75
+  wakeAbove: 40
+  wakeMoodAbove: 40
+  angryBelow: 10
+  sadBelow: 35
+  happyAbove: 75
+  hungryBelow: 40
+  coldBelow: 35
+  hotAbove: 65
+  bandMargin: 2
+  fullnessDecay: 0.12
+  fullnessPerEnergy: 2
+  sleepRegen: 1
+  sleepMoodGain: 1
+  restRegen: 0.12
+  restRegenUntil: 90
+  eatMoodBonus: 5
+  stormEnergyDrain: 0.8
+  coldCostMultiplier: 1.5
+  normalCostMultiplier: 1
+  hotCostMultiplier: 0.7
+  energeticAndFullMood: 0.6
+  hungryMood: -0.3
+  tiredMood: -0.2
+  hungryAndTiredExtra: -0.2
+  moodDriftToNormal: 0.15
+  timeScale: 1

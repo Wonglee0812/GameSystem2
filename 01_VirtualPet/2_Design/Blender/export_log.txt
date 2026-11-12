@@ -1,0 +1,11 @@
+14:54:27 Lab_Pachinko: 1 item(s), static=True
+14:55:49   colour
+14:57:12   normal
+14:58:38   emission
+14:58:39   exported Lab_Pachinko.fbx with 1 object(s)
+14:58:42 Lab_Work: 5 item(s), static=False
+15:01:20   colour
+15:03:53   normal
+15:06:30   emission
+15:06:30   exported Lab_Work.fbx with 5 object(s)
+15:06:32 ALL DONE
