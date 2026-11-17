@@ -1,7 +1,11 @@
 ﻿<Solution>
   <Project Path="WindPet.csproj" />
+  <Project Path="DamRush.csproj" />
   <Project Path="PokerTD.csproj" />
+  <Project Path="DamRush.WaterCompare.csproj" />
   <Project Path="WindPet.Editor.csproj" />
+  <Project Path="DamRush.Editor.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
   <Project Path="PokerTD.Editor.csproj" />
+  <Project Path="DamRush.WaterCompare.Editor.csproj" />
 </Solution>

@@ -1,0 +1,10 @@
+{
+    "name": "DamRush",
+    "rootNamespace": "DamRush",
+    "references": ["Unity.TextMeshPro", "UnityEngine.UI", "Unity.InputSystem", "Unity.Burst", "Unity.Collections", "Unity.Mathematics"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

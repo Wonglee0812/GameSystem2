@@ -1,0 +1,240 @@
+// Version S: shallow water equations with momentum on a staggered grid, after Chentanez and
+// Mueller (2010) "Real-time simulation of large bodies of water with small scale details".
+// Unlike the pipe model, the velocity is carried along by the flow itself (semi-Lagrangian
+// advection, Stam 1999), so pushed water keeps moving, swirls form behind obstacles and waves
+// reflect from walls.
+// Grid: depth H and ground B in cell centres; U on the faces between cells in x
+// ((NX + 1) x NZ values), W on the faces in z (NX x (NZ + 1) values).
+// One step: advect U, W -> limit outflow so no cell goes below zero -> new depth from the flows
+// -> velocity change from the slope of the water surface (gravity) and friction.
+#pragma kernel KAdvU
+#pragma kernel KAdvW
+#pragma kernel KLimit
+#pragma kernel KScaleU
+#pragma kernel KScaleW
+#pragma kernel KHeight
+#pragma kernel KVelU
+#pragma kernel KVelW
+#pragma kernel KCopy
+#pragma kernel KPack
+#pragma kernel KBrush
+
+StructuredBuffer<float> _Solid;   // ground + wall + blocks (m)
+StructuredBuffer<float> _Src;     // 1 = inflow cell
+RWStructuredBuffer<float> _H;     // depth (m)
+RWStructuredBuffer<float> _H2;    // new depth
+RWStructuredBuffer<float> _U;     // x velocity on x faces (m/s)
+RWStructuredBuffer<float> _W;     // z velocity on z faces
+RWStructuredBuffer<float> _Ut;
+RWStructuredBuffer<float> _Wt;
+RWStructuredBuffer<float> _S;     // outflow scale per cell (0-1)
+RWTexture2D<float4> _State;       // x = ground, y = depth, z = vel x, w = vel z
+
+int _NX, _NZ;
+float _Dt, _Dx, _Add, _G, _Damp, _Drag, _MaxVel;
+int _BrushMode;
+float4 _BrushPos, _BrushVec;
+
+static const float DRY = 0.002;
+
+int C(int i, int j) { return j * _NX + i; }
+int UI(int i, int j) { return j * (_NX + 1) + i; }
+int WI(int i, int j) { return j * _NX + i; }
+float D(int c) { return _H[c] + _Src[c] * _Add; }
+
+float SampleU(float2 g) // g in U-grid coordinates
+{
+    g = clamp(g, float2(0, 0), float2(_NX, _NZ - 1));
+    int2 a = (int2)floor(g); int2 b = min(a + 1, int2(_NX, _NZ - 1));
+    float2 t = g - a;
+    return lerp(lerp(_U[UI(a.x, a.y)], _U[UI(b.x, a.y)], t.x), lerp(_U[UI(a.x, b.y)], _U[UI(b.x, b.y)], t.x), t.y);
+}
+float SampleW(float2 g)
+{
+    g = clamp(g, float2(0, 0), float2(_NX - 1, _NZ));
+    int2 a = (int2)floor(g); int2 b = min(a + 1, int2(_NX - 1, _NZ));
+    float2 t = g - a;
+    return lerp(lerp(_W[WI(a.x, a.y)], _W[WI(b.x, a.y)], t.x), lerp(_W[WI(a.x, b.y)], _W[WI(b.x, b.y)], t.x), t.y);
+}
+// velocity at a world point (m in the lane)
+float2 VelAt(float2 p) { return float2(SampleU(float2(p.x / _Dx, p.y / _Dx - 0.5)), SampleW(float2(p.x / _Dx - 0.5, p.y / _Dx))); }
+
+[numthreads(8, 8, 1)]
+void KAdvU(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x, j = (int)id.y;
+    if (i > _NX || j >= _NZ) return;
+    float2 p = float2(i, j + 0.5) * _Dx;
+    float2 v = VelAt(p);
+    float2 back = p - v * _Dt;
+    _Ut[UI(i, j)] = SampleU(float2(back.x / _Dx, back.y / _Dx - 0.5));
+}
+
+[numthreads(8, 8, 1)]
+void KAdvW(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x, j = (int)id.y;
+    if (i >= _NX || j > _NZ) return;
+    float2 p = float2(i + 0.5, j) * _Dx;
+    float2 v = VelAt(p);
+    float2 back = p - v * _Dt;
+    _Wt[WI(i, j)] = SampleW(float2(back.x / _Dx - 0.5, back.y / _Dx));
+}
+
+// how much of its planned outflow a cell can really send without going below zero
+[numthreads(8, 8, 1)]
+void KLimit(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x, j = (int)id.y;
+    if (i >= _NX || j >= _NZ) return;
+    int c = C(i, j);
+    float h = D(c);
+    float out_ = max(0.0, -_Ut[UI(i, j)]) + max(0.0, _Ut[UI(i + 1, j)]) + max(0.0, -_Wt[WI(i, j)]) + max(0.0, _Wt[WI(i, j + 1)]);
+    out_ *= h * _Dx * _Dt;              // m3 leaving this step
+    float have = h * _Dx * _Dx;
+    _S[c] = out_ > have && out_ > 0.0 ? have / out_ : 1.0;
+}
+
+[numthreads(8, 8, 1)]
+void KScaleU(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x, j = (int)id.y;
+    if (i > _NX || j >= _NZ) return;
+    float u = _Ut[UI(i, j)];
+    if (i == 0) u = 0.0;                                  // closed top end
+    else if (i == _NX) u = max(0.0, u) * _S[C(i - 1, j)]; // open lower end: only outflow
+    else u *= _S[C(u > 0.0 ? i - 1 : i, j)];
+    _U[UI(i, j)] = u;
+}
+
+[numthreads(8, 8, 1)]
+void KScaleW(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x, j = (int)id.y;
+    if (i >= _NX || j > _NZ) return;
+    float w = _Wt[WI(i, j)];
+    if (j == 0 || j == _NZ) w = 0.0;                      // closed sides
+    else w *= _S[C(i, w > 0.0 ? j - 1 : j)];
+    _W[WI(i, j)] = w;
+}
+
+// flow through a face uses the depth of the cell the water comes from (upwind)
+float FaceFlowU(int i, int j)
+{
+    float u = _U[UI(i, j)];
+    if (u == 0.0) return 0.0;
+    int from = u > 0.0 ? i - 1 : i;
+    if (from < 0 || from >= _NX) return 0.0;
+    return u * D(C(from, j));
+}
+float FaceFlowW(int i, int j)
+{
+    float w = _W[WI(i, j)];
+    if (w == 0.0) return 0.0;
+    int from = w > 0.0 ? j - 1 : j;
+    if (from < 0 || from >= _NZ) return 0.0;
+    return w * D(C(i, from));
+}
+
+[numthreads(8, 8, 1)]
+void KHeight(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x, j = (int)id.y;
+    if (i >= _NX || j >= _NZ) return;
+    int c = C(i, j);
+    float net = FaceFlowU(i, j) - FaceFlowU(i + 1, j) + FaceFlowW(i, j) - FaceFlowW(i, j + 1);
+    _H2[c] = max(0.0, D(c) + _Dt * net / _Dx);
+}
+
+float Surf(int c) { return _Solid[c] + _H2[c]; }
+
+// gravity: water speeds up down the slope of its surface; friction is stronger in shallow water
+float NewVel(float v, float hFrom, float hTo, float sFrom, float sTo, float bTo, float hFace)
+{
+    v -= _G * _Dt * (sTo - sFrom) / _Dx;
+    v *= _Damp;
+    v /= 1.0 + _Dt * _Drag * abs(v) / max(hFace, 0.03);
+    return clamp(v, -_MaxVel, _MaxVel);
+}
+
+[numthreads(8, 8, 1)]
+void KVelU(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x, j = (int)id.y;
+    if (i > _NX || j >= _NZ) return;
+    int f = UI(i, j);
+    if (i == 0) { _U[f] = 0.0; return; }
+    int l = C(i - 1, j);
+    float hl = _H2[l], sl = Surf(l);
+    float hr, sr;
+    if (i == _NX) { hr = 0.0; sr = _Solid[l] - 0.5; } // the open end drains
+    else { int r = C(i, j); hr = _H2[r]; sr = Surf(r); }
+    float u = _U[f];
+    if (hl < DRY && hr < DRY) { _U[f] = 0.0; return; }
+    // no flow up onto dry ground that is higher than the water next to it
+    if (hl < DRY && sl >= sr) u = min(u, 0.0);
+    if (hr < DRY && sr >= sl) u = max(u, 0.0);
+    u = NewVel(u, hl, hr, sl, sr, 0.0, 0.5 * (hl + hr));
+    if (hl < DRY && u > 0.0) u = 0.0;   // nothing to send
+    if (hr < DRY && u < 0.0 && i < _NX) u = 0.0;
+    _U[f] = u;
+}
+
+[numthreads(8, 8, 1)]
+void KVelW(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x, j = (int)id.y;
+    if (i >= _NX || j > _NZ) return;
+    int f = WI(i, j);
+    if (j == 0 || j == _NZ) { _W[f] = 0.0; return; }
+    int b = C(i, j - 1), t = C(i, j);
+    float hb = _H2[b], ht = _H2[t], sb = Surf(b), st = Surf(t);
+    float w = _W[f];
+    if (hb < DRY && ht < DRY) { _W[f] = 0.0; return; }
+    if (hb < DRY && sb >= st) w = min(w, 0.0);
+    if (ht < DRY && st >= sb) w = max(w, 0.0);
+    w = NewVel(w, hb, ht, sb, st, 0.0, 0.5 * (hb + ht));
+    if (hb < DRY && w > 0.0) w = 0.0;
+    if (ht < DRY && w < 0.0) w = 0.0;
+    _W[f] = w;
+}
+
+[numthreads(8, 8, 1)]
+void KCopy(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x, j = (int)id.y;
+    if (i >= _NX || j >= _NZ) return;
+    int c = C(i, j);
+    _H[c] = _H2[c];
+}
+
+[numthreads(8, 8, 1)]
+void KPack(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x, j = (int)id.y;
+    if (i >= _NX || j >= _NZ) return;
+    int c = C(i, j);
+    float u = 0.5 * (_U[UI(i, j)] + _U[UI(i + 1, j)]);
+    float w = 0.5 * (_W[WI(i, j)] + _W[WI(i, j + 1)]);
+    _State[id.xy] = float4(_Solid[c], _H[c], u, w);
+}
+
+// player brush: 0 = push (pull the velocity towards the drag), 1 = splash, 2 = water level
+[numthreads(8, 8, 1)]
+void KBrush(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x, j = (int)id.y;
+    if (i >= _NX || j >= _NZ) return;
+    int c = C(i, j);
+    if (_BrushMode == 2) { if (_H[c] > 0.01) _H[c] = max(0.0, _H[c] + _BrushVec.z); return; }
+    float2 p = (float2(i, j) + 0.5) * _Dx;
+    float t = length(p - _BrushPos.xy) / _BrushPos.z;
+    if (t >= 1.0) return;
+    float w = 1.0 - t * t;
+    if (_BrushMode == 1) { _H[c] += _BrushVec.z * w * w; return; }
+    if (_H[c] < 0.02) return;
+    float k = w * 0.6;
+    // this cell owns its left x face and its lower z face
+    if (i > 0) _U[UI(i, j)] += (_BrushVec.x - _U[UI(i, j)]) * k;
+    if (j > 0) _W[WI(i, j)] += (_BrushVec.y - _W[WI(i, j)]) * k;
+}

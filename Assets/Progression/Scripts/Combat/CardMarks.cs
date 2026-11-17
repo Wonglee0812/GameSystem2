@@ -11,6 +11,8 @@ namespace PokerTD
     /// - The timer gets shorter as more cards are on the enemy (config.markWait).
     /// - The burst uses the buffs of the tower that added the last card.
     /// - Every hit also does the card's own value as damage at once (Card.Value).
+    /// - Test option (TDGame.BurstAtBestHand): burst at once when the marks already make the best
+    ///   hand the tower cards can reach, because waiting cannot give a higher hand. Only for Pair or higher.
     /// </summary>
     public class CardMarks : MonoBehaviour
     {
@@ -64,6 +66,10 @@ namespace PokerTD
             cards.Add(card);
             lastTower = from;
             if (cards.Count >= 5) { Burst(); return; }
+            var game = TDGame.Instance;
+            var now = game.Effective(HandEvaluator.Evaluate(cards));
+            // High Card never bursts early: one gatling with High Card was strong enough to win (playtest 2026-11-12)
+            if (game.BurstAtBestHand && now > HandType.HighCard && now >= game.BestReachableHand) { Burst(); return; }
             timer = config.WaitAfter(cards.Count);
             Refresh();
         }
@@ -76,6 +82,9 @@ namespace PokerTD
             timerBar.localScale = new Vector3(1.14f * Mathf.Clamp01(timer / full), 0.05f, 1f);
             if (timer <= 0f) Burst();
         }
+
+        /// <summary>Bursts the marks now (Detonate item). Does nothing without marks.</summary>
+        public void BurstNow() { if (cards.Count > 0) Burst(); }
 
         void Burst()
         {

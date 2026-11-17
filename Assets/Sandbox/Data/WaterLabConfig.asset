@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2d3e1d799e9644d40bed239aa2a9da52, type: 3}
+  m_Name: WaterLabConfig
+  m_EditorClassIdentifier: DamRush::DamRush.SandboxConfig
+  cellsX: 64
+  cellsZ: 40
+  cellSize: 0.5
+  bankHeight: 3
+  channelHalfWidth: 3
+  bankSlope: 3
+  riverDrop: 0.6
+  terrainSeed: 7
+  gorgeWidthFactor: 0.25
+  villageTerraceHeight: 0.6
+  gravity: 9.81
+  pipeArea: 0.25
+  fluxDamping: 0.993
+  friction: 1
+  manningN: 0.035
+  displaceWater: 1
+  openEndX: 1
+  substeps: 2
+  baseInflow: 1.2
+  obstacleRefresh: 0.1
+  buildTime: 75
+  firstPeakInflow: 7
+  peakGrowth: 3.5
+  waveRamp: 4
+  waveHold: 18
+  waveCalm: 14
+  villageMaxHealth: 100
+  villageSafeDepth: 0.15
+  villageDamagePerMetre: 18
+  startBudget: 120
+  budgetPerWave: 50
+  snapStep: 0.5
+  snapAngle: 15
+  maxDebris: 250
+  debrisLifetime: 40
+  waterDensity: 1000
+  pressureScale: 1
+  dragCoefficient: 1.1
+  waterLinearDamping: 0.6
+  waterAngularDamping: 0.8
+  probeStep: 0.25

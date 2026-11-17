@@ -102,7 +102,7 @@ namespace PokerTD
             if (MachineSelected)
             {
                 var buff = game.MachineStock[StockIndex];
-                bool okM = hovered.IsFree && !hovered.isPath;
+                bool okM = hovered.IsFree && !hovered.isPath && game.CanPlaceMachine;
                 hovered.Highlight(true, okM);
                 if (okM && pointer.press.wasPressedThisFrame)
                 {

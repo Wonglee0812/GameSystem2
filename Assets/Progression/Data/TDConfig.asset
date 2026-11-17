@@ -59,6 +59,8 @@ MonoBehaviour:
     chipsPerLevel: 0.2
     startsLocked: 1
   useLocks: 1
+  flushStraightCards: 5
+  burstAtBestHand: 1
   markWait:
   - 2
   - 1.6
@@ -147,6 +149,96 @@ MonoBehaviour:
     areaRadius: 1.2
     color: {r: 0.6, g: 0.25, b: 0.6, a: 1}
     onPath: 1
+  buffs:
+  - kind: 0
+    name: +Chips
+    value: 50
+    cost: 6
+    color: {r: 0.3, g: 0.55, b: 1, a: 1}
+  - kind: 1
+    name: +%Chips
+    value: 0.25
+    cost: 7
+    color: {r: 0.3, g: 0.85, b: 0.9, a: 1}
+  - kind: 2
+    name: +Mult
+    value: 4
+    cost: 6
+    color: {r: 1, g: 0.35, b: 0.3, a: 1}
+  - kind: 3
+    name: xMult
+    value: 1.5
+    cost: 9
+    color: {r: 0.95, g: 0.3, b: 0.75, a: 1}
+  ringWidth: 2.5
+  ringOneIsInner: 1
+  startMachineLimit: 5
+  shopOffers: 4
+  machineWeight: 40
+  handLevelWeight: 25
+  itemWeight: 20
+  towerSlotWeight: 6
+  machineSlotWeight: 6
+  unlockWeight: 3
+  handLevelCost: 4
+  towerSlotCost: 8
+  machineSlotCost: 8
+  slotCostStep: 4
+  unlockCost: 20
+  rerollCost: 3
+  rerollCostStep: 1
+  itemSlots: 4
+  items:
+  - kind: 0
+    name: Slow
+    description: all enemies half speed 5s
+    cost: 3
+    value: 0.5
+    seconds: 5
+  - kind: 1
+    name: Extra discard
+    description: +1 discard this turn
+    cost: 2
+    value: 1
+    seconds: 0
+  - kind: 2
+    name: Detonate
+    description: burst every marked enemy now
+    cost: 4
+    value: 1
+    seconds: 0
+  - kind: 3
+    name: Freeze
+    description: stop the front enemy 4s
+    cost: 3
+    value: 1
+    seconds: 4
+  - kind: 4
+    name: Hand manual
+    description: +1 level to a hand you pick
+    cost: 6
+    value: 1
+    seconds: 0
+  - kind: 5
+    name: Tower permit
+    description: +1 tower slot
+    cost: 10
+    value: 1
+    seconds: 0
+  - kind: 6
+    name: Machine permit
+    description: +1 machine slot
+    cost: 10
+    value: 1
+    seconds: 0
+  sellBack: 0.5
+  baseHandSize: 8
+  cardsPerExtraTower: 2
+  sameCardResetsTimer: 0
+  aimAtUnmarked: 1
+  discardsPerTurn: 3
+  startTowerLimit: 5
+  boardMoveSeconds: 0.9
   startLives: 20
   startGold: 15
   waveGold: 4

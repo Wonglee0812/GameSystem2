@@ -49,7 +49,16 @@ namespace PokerTD.UI
             sortRank.gameObject.SetActive(show);
             sortSuit.gameObject.SetActive(show);
             discardLabel.text = $"Discard  ({Hand.DiscardsLeft})";
+            MarkActive(sortRank, Hand.Mode == CardHand.SortMode.Rank);
+            MarkActive(sortSuit, Hand.Mode == CardHand.SortMode.Suit);
             discardButton.interactable = Hand.DiscardsLeft > 0 && Hand.Selected.Count > 0;
+        }
+
+        /// <summary>The active sort button gets a yellow label, so the player sees which order is on.</summary>
+        static void MarkActive(Button b, bool on)
+        {
+            var t = b.GetComponentInChildren<TMP_Text>();
+            t.color = on ? new Color(1f, 0.85f, 0.38f) : Color.white;
         }
 
         /// <summary>A small copy of the discard button, in a row above it.</summary>

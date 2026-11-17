@@ -12,7 +12,11 @@ namespace PokerTD
     /// </summary>
     public class CardHand
     {
+        public enum SortMode { None, Rank, Suit }
+
         public readonly List<Card> Cards = new List<Card>();
+        /// <summary>Set by the Sort buttons. Like Balatro: after one click, every new card is sorted in automatically.</summary>
+        public SortMode Mode { get; private set; } = SortMode.None;
         public readonly HashSet<int> Selected = new HashSet<int>();
         public int DiscardsLeft { get; private set; }
         public event Action Changed;
@@ -34,6 +38,7 @@ namespace PokerTD
         {
             for (int i = 0; i < count; i++)
                 if (deck.TryDraw(out Card c)) Cards.Add(c);
+            ApplySort();
             Changed?.Invoke();
         }
 
@@ -42,6 +47,9 @@ namespace PokerTD
             if (!Selected.Remove(index)) Selected.Add(index);
             Changed?.Invoke();
         }
+
+        /// <summary>Extra discards for this turn (Extra discard item).</summary>
+        public void AddDiscards(int amount) { DiscardsLeft += amount; Changed?.Invoke(); }
 
         /// <summary>Throws the selected cards away and draws the same number. Uses one discard.</summary>
         public bool Discard()
@@ -67,16 +75,24 @@ namespace PokerTD
             if (tower.HasCard) Cards.Insert(index, tower.Card);
             tower.SetCard(card);
             Selected.Clear();
+            ApplySort();
             Changed?.Invoke();
         }
 
-        /// <summary>Sorts the hand: by rank (A high first) or by suit (then rank).</summary>
+        /// <summary>Sorts the hand by rank (A high first) or by suit (then rank), and keeps
+        /// that order for every card drawn later in the run.</summary>
         public void Sort(bool bySuit)
         {
-            if (bySuit) Cards.Sort((a, b) => a.suit != b.suit ? a.suit.CompareTo(b.suit) : b.rank.CompareTo(a.rank));
-            else Cards.Sort((a, b) => a.rank != b.rank ? b.rank.CompareTo(a.rank) : a.suit.CompareTo(b.suit));
+            Mode = bySuit ? SortMode.Suit : SortMode.Rank;
+            ApplySort();
             Selected.Clear();
             Changed?.Invoke();
+        }
+
+        void ApplySort()
+        {
+            if (Mode == SortMode.Suit) Cards.Sort((a, b) => a.suit != b.suit ? a.suit.CompareTo(b.suit) : b.rank.CompareTo(a.rank));
+            else if (Mode == SortMode.Rank) Cards.Sort((a, b) => a.rank != b.rank ? b.rank.CompareTo(a.rank) : a.suit.CompareTo(b.suit));
         }
 
         /// <summary>Takes a tower's card back into the hand.</summary>
@@ -85,6 +101,7 @@ namespace PokerTD
             if (tower == null || !tower.HasCard) return;
             Cards.Add(tower.Card);
             tower.ClearCard();
+            ApplySort();
             Changed?.Invoke();
         }
     }

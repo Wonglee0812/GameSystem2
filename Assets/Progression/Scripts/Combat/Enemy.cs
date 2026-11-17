@@ -22,6 +22,21 @@ namespace PokerTD
         public float Progress { get; private set; }
 
         int next = 1;
+        float slowFactor = 1f, slowTime, freezeTime;
+
+        /// <summary>Slow item: speed x factor for some seconds (the stronger slow wins).</summary>
+        public void Slow(float factor, float seconds)
+        {
+            if (slowTime <= 0f || factor < slowFactor) slowFactor = factor;
+            slowTime = Mathf.Max(slowTime, seconds);
+        }
+
+        /// <summary>Freeze item: stops walking for some seconds.</summary>
+        public void Freeze(float seconds)
+        {
+            freezeTime = Mathf.Max(freezeTime, seconds);
+            FloatText.Show("Frozen", transform.position + Vector3.up * 2f, new Color(0.6f, 0.9f, 1f));
+        }
         Transform head;
         Transform barFill;
 
@@ -83,7 +98,10 @@ namespace PokerTD
             if (next >= route.points.Length) { ReachBase(); return; }
             Vector3 target = route.points[next].position + Vector3.up * Type.size;
             Vector3 to = target - transform.position;
-            float step = Type.speed * Time.deltaTime;
+            slowTime -= Time.deltaTime;
+            freezeTime -= Time.deltaTime;
+            float speed = freezeTime > 0f ? 0f : slowTime > 0f ? Type.speed * slowFactor : Type.speed;
+            float step = speed * Time.deltaTime;
             if (to.magnitude <= step) { transform.position = target; next++; }
             else transform.position += to.normalized * step;
             Progress += step;

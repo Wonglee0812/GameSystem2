@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f54471bc674cabf4fb61587902d34c61, type: 3}
+  m_Name: Mat_Stone
+  m_EditorClassIdentifier: DamRush::DamRush.MaterialDef
+  displayName: Stone
+  color: {r: 0.56, g: 0.57, b: 0.6, a: 1}
+  renderMaterial: {fileID: 2100000, guid: c2757dd99d2c9344f9df54f6e7637b1c, type: 2}
+  density: 2500
+  friction: 0.7
+  jointStrength: 30000
+  toughness: 12
+  costPerCubicMetre: 6
+  erodes: 0
+  erosionPerSecond: 0.04
+  gluesToGround: 0

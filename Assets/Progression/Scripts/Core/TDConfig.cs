@@ -67,6 +67,20 @@ namespace PokerTD
         }
 
         [Serializable]
+        public class ItemType
+        {
+            public ItemKind kind;
+            public string name;
+            [Tooltip("Shown in the shop and on the item button.")]
+            public string description;
+            public int cost = 3;
+            [Tooltip("Slow: speed factor (0.5 = half speed). Extra discard: discards added.")]
+            public float value = 1f;
+            [Tooltip("Slow and Freeze: how long it lasts.")]
+            public float seconds = 0f;
+        }
+
+        [Serializable]
         public class TowerType
         {
             public TowerKind kind;
@@ -101,7 +115,9 @@ namespace PokerTD
 
         [Header("Hands")]
         [Tooltip("Cards needed for a Flush or a Straight. Each tower holds one card and the same card marks only once, so an enemy can carry at most (towers) different cards. 4 = like Balatro's Four Fingers joker.")]
-        [Range(4, 5)] public int flushStraightCards = 4;
+        [Range(4, 5)] public int flushStraightCards = 5;
+        [Tooltip("Test option. On: an enemy bursts at once when its marks already make the best hand the tower cards can reach (the best hand in the COMBOS panel), with no wait. Only for Pair or higher; High Card always waits for the timer. The HUD button can switch it during play.")]
+        public bool burstAtBestHand = true;
 
         [Header("Marks")]
         [Tooltip("Seconds to wait for the next mark, by number of marks already on the enemy (1, 2, 3, 4). 5 marks burst at once.")]
@@ -147,8 +163,30 @@ namespace PokerTD
         public bool ringOneIsInner = true;
         [Tooltip("How many buff machines the player may own (placed + waiting), like joker slots.")]
         public int startMachineLimit = 5;
-        [Tooltip("Random machines offered in the shop after each wave.")]
-        public int shopMachineOffers = 3;
+        [Header("Shop (step 5)")]
+        [Tooltip("Random offers in the shop after each wave (machines, hand upgrades, slots, items, unlocks).")]
+        public int shopOffers = 4;
+        [Tooltip("Chance weights of each offer kind. Unlocks only roll while a hand is still locked.")]
+        public float machineWeight = 40f, handLevelWeight = 25f, itemWeight = 20f, towerSlotWeight = 6f, machineSlotWeight = 6f, unlockWeight = 3f;
+        public int handLevelCost = 4;
+        [Tooltip("Slot prices: base + step for every slot of that kind bought before.")]
+        public int towerSlotCost = 8, machineSlotCost = 8, slotCostStep = 4;
+        [Tooltip("Rare and expensive: unlocks Four of a Kind or Straight Flush.")]
+        public int unlockCost = 20;
+        [Tooltip("Reroll price at the start of each shop turn, and how much it goes up per reroll (Balatro: 5, +1).")]
+        public int rerollCost = 3, rerollCostStep = 1;
+        [Tooltip("One-use items the player can hold at once.")]
+        public int itemSlots = 4;
+        public ItemType[] items =
+        {
+            new ItemType { kind = ItemKind.Slow,         name = "Slow",          cost = 3, value = 0.5f, seconds = 5f, description = "all enemies half speed 5s" },
+            new ItemType { kind = ItemKind.ExtraDiscard, name = "Extra discard", cost = 2, value = 1f,  description = "+1 discard this turn" },
+            new ItemType { kind = ItemKind.BurstMarked,  name = "Detonate",      cost = 4, description = "burst every marked enemy now" },
+            new ItemType { kind = ItemKind.Freeze,       name = "Freeze",        cost = 3, seconds = 4f, description = "stop the front enemy 4s" },
+            new ItemType { kind = ItemKind.HandLevel,    name = "Hand manual",   cost = 6, description = "+1 level to a hand you pick" },
+            new ItemType { kind = ItemKind.TowerSlot,    name = "Tower permit",  cost = 10, description = "+1 tower slot" },
+            new ItemType { kind = ItemKind.MachineSlot,  name = "Machine permit",cost = 10, description = "+1 machine slot" },
+        };
         [Tooltip("Selling a placed machine gives back this part of its cost (Balatro: half).")]
         [Range(0f, 1f)] public float sellBack = 0.5f;
 
@@ -164,7 +202,7 @@ namespace PokerTD
         [Tooltip("Discards per battle turn (Balatro starts with 3).")]
         public int discardsPerTurn = 3;
         [Tooltip("How many towers may stand on the map at the start. More can be bought later.")]
-        public int startTowerLimit = 4;
+        public int startTowerLimit = 5;
         [Tooltip("Seconds for the board to sink into the shop and rise again.")]
         public float boardMoveSeconds = 0.9f;
 

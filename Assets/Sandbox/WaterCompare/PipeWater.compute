@@ -1,0 +1,95 @@
+// Version C: the virtual-pipe shallow water model (Mei et al., 2007) on the GPU.
+// One thread per cell. KFlux: flow in the four pipes of each cell. KDepth: new depth and
+// velocity from the flows in and out. KPack: writes ground, depth and velocity into a
+// texture that the water surface shader reads (no copy back to the CPU).
+#pragma kernel KFlux
+#pragma kernel KDepth
+#pragma kernel KPack
+#pragma kernel KBrush
+
+StructuredBuffer<float> _Solid;   // ground + dam wall (m)
+StructuredBuffer<float> _Src;     // 1 = inflow cell
+RWStructuredBuffer<float> _Depth; // water depth (m)
+RWStructuredBuffer<float4> _Flux; // flow to the left, right, back (-z), front (+z) neighbour (m3/s)
+RWStructuredBuffer<float2> _Vel;  // flow velocity (m/s)
+RWTexture2D<float4> _State;       // x = ground, y = depth, z = vel x, w = vel z
+
+int _NX, _NZ;
+float _Dt, _K, _Damp, _Area, _Add, _Dx;
+int _BrushMode;      // 0 = push, 1 = splash, 2 = water level
+float4 _BrushPos;    // xy = centre (m), z = radius (m)
+float4 _BrushVec;    // xy = push speed (m/s), z = splash height (m)
+
+float Height(int c) { return _Solid[c] + _Depth[c] + _Src[c] * _Add; }
+
+[numthreads(8, 8, 1)]
+void KFlux(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x, j = (int)id.y;
+    if (i >= _NX || j >= _NZ) return;
+    int c = j * _NX + i;
+    float d = _Depth[c] + _Src[c] * _Add;
+    float h = _Solid[c] + d;
+    float4 f = _Flux[c];
+    float l = i > 0 ? max(0.0, f.x * _Damp + _K * (h - Height(c - 1))) : 0.0;
+    float r = i < _NX - 1 ? max(0.0, f.y * _Damp + _K * (h - Height(c + 1))) : max(0.0, f.y * _Damp + _K * (h - (_Solid[c] - 0.5)));
+    float b = j > 0 ? max(0.0, f.z * _Damp + _K * (h - Height(c - _NX))) : 0.0;
+    float t = j < _NZ - 1 ? max(0.0, f.w * _Damp + _K * (h - Height(c + _NX))) : 0.0;
+    float sum = l + r + b + t;
+    if (sum > 0.0)
+    {
+        float s = min(1.0, d * _Area / (sum * _Dt)); // never more than the cell holds
+        l *= s; r *= s; b *= s; t *= s;
+    }
+    _Flux[c] = float4(l, r, b, t);
+}
+
+[numthreads(8, 8, 1)]
+void KDepth(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x, j = (int)id.y;
+    if (i >= _NX || j >= _NZ) return;
+    int c = j * _NX + i;
+    float4 f = _Flux[c];
+    float inL = i > 0 ? _Flux[c - 1].y : 0.0;
+    float inR = i < _NX - 1 ? _Flux[c + 1].x : 0.0;
+    float inB = j > 0 ? _Flux[c - _NX].w : 0.0;
+    float inT = j < _NZ - 1 ? _Flux[c + _NX].z : 0.0;
+    float before = _Depth[c] + _Src[c] * _Add;
+    float now = max(0.0, before + _Dt * (inL + inR + inB + inT - f.x - f.y - f.z - f.w) / _Area);
+    _Depth[c] = now;
+    float avg = max(0.02, 0.5 * (before + now));
+    _Vel[c] = float2(0.5 * (inL - f.x + f.y - inR), 0.5 * (inB - f.z + f.w - inT)) / (_Dx * avg);
+}
+
+[numthreads(8, 8, 1)]
+void KPack(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x, j = (int)id.y;
+    if (i >= _NX || j >= _NZ) return;
+    int c = j * _NX + i;
+    _State[id.xy] = float4(_Solid[c], _Depth[c], _Vel[c].x, _Vel[c].y);
+}
+
+// Player brush: push the water in a direction (adds flow to the pipes) or splash extra water in.
+[numthreads(8, 8, 1)]
+void KBrush(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x, j = (int)id.y;
+    if (i >= _NX || j >= _NZ) return;
+    int c = j * _NX + i;
+    // 2 = raise or lower the water in every wet cell
+    if (_BrushMode == 2) { if (_Depth[c] > 0.01) _Depth[c] = max(0.0, _Depth[c] + _BrushVec.z); return; }
+    float2 p = (float2(i, j) + 0.5) * _Dx;
+    float t = length(p - _BrushPos.xy) / _BrushPos.z;
+    if (t >= 1.0) return;
+    float w = 1.0 - t * t;
+    if (_BrushMode == 1) { _Depth[c] += _BrushVec.z * w * w; return; }
+    // pull the pipe flows towards the asked flow (bounded: holding the push does not pump water)
+    float q = _Depth[c] * _Dx, k = w * 0.5;
+    float4 f = _Flux[c];
+    float vx = _BrushVec.x * q, vz = _BrushVec.y * q;
+    if (vx > 0.0) { f.y += (vx - f.y) * k; f.x *= 1.0 - k; } else { f.x += (-vx - f.x) * k; f.y *= 1.0 - k; }
+    if (vz > 0.0) { f.w += (vz - f.w) * k; f.z *= 1.0 - k; } else { f.z += (-vz - f.z) * k; f.w *= 1.0 - k; }
+    _Flux[c] = f;
+}
