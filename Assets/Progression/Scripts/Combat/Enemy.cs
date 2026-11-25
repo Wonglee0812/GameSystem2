@@ -8,7 +8,7 @@ namespace PokerTD
     /// An enemy walking the path from waypoint to waypoint. It carries the card marks
     /// (CardMarks) and a health bar above its head. Reaching the base costs lives;
     /// dying gives gold. Boom enemies stun nearby towers when they die.
-    /// Graybox: the body is a capsule primitive, coloured by type.
+    /// Look: a Kenney UFO (CC0) that bobs and spins; graybox capsule when the art asset is missing.
     /// </summary>
     public class Enemy : MonoBehaviour
     {
@@ -39,22 +39,45 @@ namespace PokerTD
         }
         Transform head;
         Transform barFill;
+        Transform body;      // Kenney model (null in graybox)
+        float bobPhase;
+        /// <summary>Plain material for the health bar and mark timer quads.</summary>
+        public Material BarMaterial { get; private set; }
+        /// <summary>The visible model (Kenney UFO); null in graybox.</summary>
+        public Transform Body => body;
 
         public static Enemy Spawn(TDConfig.EnemyType type, float health, Material material)
         {
             var route = PathRoute.Instance;
-            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            Destroy(go.GetComponent<Collider>());
-            go.name = "Enemy_" + type.name;
-            go.transform.position = route.points[0].position + Vector3.up * type.size;
-            go.transform.localScale = Vector3.one * type.size;
-            var r = go.GetComponent<Renderer>();
-            r.sharedMaterial = material;
-            var block = new MaterialPropertyBlock();
-            block.SetColor("_BaseColor", type.color);
-            r.SetPropertyBlock(block);
+            var model = PTDArt.I != null ? PTDArt.I.Ufo(type.name) : null;
+            GameObject go;
+            Transform body = null;
+            if (model != null)
+            {
+                go = new GameObject("Enemy_" + type.name);
+                go.transform.position = route.points[0].position + Vector3.up * type.size;
+                body = PTDArt.Place(model, go.transform, Vector3.down * 0.5f * type.size, type.size * 1.6f);
+                PTDArt.Tint(body, Color.Lerp(Color.white, type.color, 0.35f));
+                foreach (var mr in body.GetComponentsInChildren<Renderer>()) mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+            }
+            else
+            {
+                go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                Destroy(go.GetComponent<Collider>());
+                go.name = "Enemy_" + type.name;
+                go.transform.position = route.points[0].position + Vector3.up * type.size;
+                go.transform.localScale = Vector3.one * type.size;
+                var r = go.GetComponent<Renderer>();
+                r.sharedMaterial = material;
+                var block = new MaterialPropertyBlock();
+                block.SetColor("_BaseColor", type.color);
+                r.SetPropertyBlock(block);
+            }
 
             var e = go.AddComponent<Enemy>();
+            e.body = body;
+            e.bobPhase = Random.value * 6.28f;
+            e.BarMaterial = material;
             e.Type = type;
             e.MaxHealth = e.Health = health;
             e.BuildHead();
@@ -69,8 +92,9 @@ namespace PokerTD
         {
             head = new GameObject("Head").transform;
             head.SetParent(transform, false);
-            head.localPosition = Vector3.up * 1.6f;
-            head.localScale = Vector3.one / Type.size;   // same size for every enemy
+            float k = transform.localScale.x;   // graybox: scaled by size; Kenney: 1
+            head.localPosition = Vector3.up * (body != null ? 1.15f : 1.6f) * Type.size / k;
+            head.localScale = Vector3.one / k;   // same size for every enemy
             var back = Quad("BarBack", new Color(0.15f, 0.1f, 0.08f), 1.2f, 0.16f, 0.001f);
             barFill = Quad("BarFill", new Color(0.35f, 0.85f, 0.35f), 1.14f, 0.11f, 0f).transform;
         }
@@ -84,7 +108,7 @@ namespace PokerTD
             q.transform.localPosition = new Vector3(0f, 0f, z);
             q.transform.localScale = new Vector3(w, h, 1f);
             var r = q.GetComponent<Renderer>();
-            r.sharedMaterial = GetComponent<Renderer>().sharedMaterial;
+            r.sharedMaterial = BarMaterial;
             var block = new MaterialPropertyBlock();
             block.SetColor("_BaseColor", color);
             r.SetPropertyBlock(block);
@@ -94,6 +118,11 @@ namespace PokerTD
 
         void Update()
         {
+            if (body != null)   // UFO hover: bob up and down, spin (not while frozen)
+            {
+                body.localPosition = Vector3.up * (-0.5f * Type.size + Mathf.Sin(Time.time * 3f + bobPhase) * 0.08f);
+                if (freezeTime <= 0f) body.Rotate(0f, 120f * Time.deltaTime, 0f, Space.Self);
+            }
             var route = PathRoute.Instance;
             if (next >= route.points.Length) { ReachBase(); return; }
             Vector3 target = route.points[next].position + Vector3.up * Type.size;
@@ -118,11 +147,13 @@ namespace PokerTD
         {
             if (Health <= 0f) return;
             Health -= amount;
+            Juice.EnemyHit(this);
             if (Health <= 0f) Die();
         }
 
         void Die()
         {
+            Juice.EnemyDied(this);
             TDGame.Instance.AddGold(Type.gold);
             if (Type.stunRadius > 0f)
             {

@@ -1,0 +1,219 @@
+using DG.Tweening;
+using TMPro;
+using UnityEngine;
+
+namespace PokerTD.UI
+{
+    /// <summary>
+    /// Game information on two wooden signboards standing on the table (3D world UI):
+    /// - top board, behind the map: ANTE (big title), WAVE under it, then a short hint for the phase;
+    /// - right board, next to the map: sections ECONOMY, HEALTH, BUILD, HAND and COMBOS.
+    /// The boards are not part of the battle board, so they stay while the board sinks into the shop.
+    /// Numbers get a punch when they change. The camera is moved back a little so both boards fit.
+    /// </summary>
+    public class WorldHud : MonoBehaviour
+    {
+        [Header("Camera (moved back so the boards and the bottom cards fit)")]
+        public Vector3 cameraPosition = new Vector3(3.6f, 35f, -27f);
+        public Vector3 cameraEuler = new Vector3(57f, 0f, 0f);
+
+        [Header("Boards")]
+        public Vector3 topBoardPosition = new Vector3(0f, 0f, 11.2f);
+        public Vector2 topBoardSize = new Vector2(12f, 3.6f);
+        public Vector3 rightBoardPosition = new Vector3(18.6f, 0f, 0.2f);
+        public Vector2 rightBoardSize = new Vector2(7.6f, 10.4f);
+
+        static readonly Color WoodDark = new Color(0.36f, 0.21f, 0.12f);
+        static readonly Color WoodDark2 = new Color(0.31f, 0.18f, 0.1f);
+        static readonly Color WoodFrame = new Color(0.78f, 0.45f, 0.25f);
+        static readonly Color Text = new Color(0.98f, 0.93f, 0.82f);
+        static readonly Color Header = new Color(1f, 0.78f, 0.28f);
+
+        Material material;
+        TextMeshPro ante, wave, hint, gold, lives, towers, machines, discards, deck, combos;
+        string lastAnte, lastWave, lastGold, lastLives, lastTowers, lastMachines, lastDiscards;
+
+        void Start()
+        {
+            var cam = Camera.main;
+            if (cam != null)
+            {
+                cam.transform.position = cameraPosition;
+                cam.transform.eulerAngles = cameraEuler;
+            }
+            material = BuildManager.Instance != null ? BuildManager.Instance.material : null;
+            var root = new GameObject("WorldHUD").transform;
+
+            // top board
+            var top = Board(root, "TopBoard", topBoardPosition, topBoardSize, 0.8f);
+            ante = Label(top, "Ante", UiKit.Title, 11f, Header, new Vector2(0f, 0.9f), TextAlignmentOptions.Center, topBoardSize.x - 0.6f);
+            wave = Label(top, "Wave", UiKit.Number, 9f, Text, new Vector2(0f, -0.25f), TextAlignmentOptions.Center, topBoardSize.x - 0.6f);
+            hint = Label(top, "Hint", UiKit.Number, 5.5f, new Color(0.9f, 0.82f, 0.7f), new Vector2(0f, -1.2f), TextAlignmentOptions.Center, topBoardSize.x - 0.8f);
+
+            // right board
+            var right = Board(root, "RightBoard", rightBoardPosition, rightBoardSize, 0.4f);
+            float y = rightBoardSize.y * 0.5f - 0.6f;
+            float w = rightBoardSize.x - 0.8f;
+            Section(right, "ECONOMY", ref y, w);
+            gold = Row(right, "tokens_stack", UiKit.Gold, ref y, w);
+            Section(right, "HEALTH", ref y, w);
+            lives = Row(right, "suit_hearts", UiKit.Red, ref y, w);
+            Section(right, "BUILD", ref y, w);
+            towers = Row(right, "structure_tower", Text, ref y, w);
+            machines = Row(right, "fire", new Color(0.6f, 0.85f, 1f), ref y, w);
+            Section(right, "HAND", ref y, w);
+            discards = Row(right, "cards_fan", Text, ref y, w);
+            deck = Row(right, "cards_stack", Text, ref y, w);
+            Section(right, "COMBOS", ref y, w);
+            float h = y + rightBoardSize.y * 0.5f - 0.3f;   // room left down to the bottom edge
+            combos = Label(right, "Combos", UiKit.Number, 3.3f, Text, new Vector2(0f, y + 0.35f - h * 0.5f), TextAlignmentOptions.TopLeft, w);
+            combos.rectTransform.sizeDelta = new Vector2(w, h);
+            combos.outlineWidth = 0.1f;
+            combos.textWrappingMode = TextWrappingModes.NoWrap;
+            combos.richText = true;
+            ComboView.WorldTarget = combos;
+        }
+
+        void OnDestroy()
+        {
+            if (ComboView.WorldTarget == combos) ComboView.WorldTarget = null;
+        }
+
+        /// <summary>A sign: frame, planks, two posts. Returns the front plane (text goes on it, facing the camera).</summary>
+        Transform Board(Transform root, string name, Vector3 basePos, Vector2 size, float lift)
+        {
+            var board = new GameObject(name).transform;
+            board.SetParent(root, false);
+            Vector3 centre = basePos + Vector3.up * (lift + size.y * 0.5f);
+            board.position = centre;
+            var cam = Camera.main;
+            // face the camera, but stay upright around the vertical axis... then lean back towards it
+            Vector3 toCam = cam != null ? cam.transform.position - centre : Vector3.back;
+            board.rotation = Quaternion.LookRotation(-toCam.normalized, Vector3.up);
+
+            Box(board, "Frame", new Vector3(0f, 0f, 0.06f), new Vector3(size.x + 0.45f, size.y + 0.45f, 0.22f), WoodFrame);
+            int planks = Mathf.Max(2, Mathf.RoundToInt(size.y / 0.9f));
+            float ph = size.y / planks;
+            for (int i = 0; i < planks; i++)
+                Box(board, "Plank" + i, new Vector3(0f, -size.y * 0.5f + ph * (i + 0.5f), -0.06f), new Vector3(size.x, ph * 0.94f, 0.2f), i % 2 == 0 ? WoodDark : WoodDark2);
+            // posts from the ground to the sign (world vertical)
+            for (int s = -1; s <= 1; s += 2)
+            {
+                Vector3 top = board.TransformPoint(new Vector3(s * (size.x * 0.5f - 0.5f), -size.y * 0.5f, 0.2f));
+                Vector3 bottom = new Vector3(top.x, 0f, top.z);
+                var post = Box(null, "Post", Vector3.zero, new Vector3(0.35f, Vector3.Distance(top, bottom) + 0.4f, 0.35f), WoodFrame);
+                post.SetParent(board, true);
+                post.position = (top + bottom) * 0.5f;
+                post.rotation = Quaternion.identity;
+            }
+            var front = new GameObject("Front").transform;
+            front.SetParent(board, false);
+            front.localPosition = new Vector3(0f, 0f, -0.18f);
+            return front;
+        }
+
+        Transform Box(Transform parent, string name, Vector3 local, Vector3 scale, Color color)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Destroy(go.GetComponent<Collider>());
+            go.name = name;
+            if (parent != null) go.transform.SetParent(parent, false);
+            go.transform.localPosition = local;
+            go.transform.localScale = scale;
+            var r = go.GetComponent<Renderer>();
+            if (material != null) r.sharedMaterial = material;
+            var block = new MaterialPropertyBlock();
+            block.SetColor("_BaseColor", color);
+            r.SetPropertyBlock(block);
+            return go.transform;
+        }
+
+        static TextMeshPro Label(Transform parent, string name, TMP_FontAsset font, float size, Color color, Vector2 pos, TextAlignmentOptions align, float width)
+        {
+            var t = new GameObject(name).AddComponent<TextMeshPro>();
+            t.transform.SetParent(parent, false);
+            t.rectTransform.sizeDelta = new Vector2(width, size * 0.12f);
+            t.rectTransform.localPosition = new Vector3(pos.x, pos.y, 0f);
+            // the board's +Z points away from the camera, so TextMeshPro (read along +Z) needs no turn
+            t.rectTransform.localRotation = Quaternion.identity;
+            t.font = font;
+            t.fontSize = size;
+            t.color = color;
+            t.alignment = align;
+            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.outlineWidth = 0.18f;
+            t.outlineColor = new Color32(35, 20, 12, 255);
+            return t;
+        }
+
+        void Section(Transform board, string title, ref float y, float width)
+        {
+            var t = Label(board, title, UiKit.Title, 4.2f, Header, new Vector2(0f, y), TextAlignmentOptions.Left, width);
+            t.fontStyle = FontStyles.UpperCase;
+            t.text = title;
+            y -= 0.62f;
+        }
+
+        TextMeshPro Row(Transform board, string icon, Color iconColor, ref float y, float width)
+        {
+            var sprite = UiKit.Icon(icon);
+            if (sprite != null)
+            {
+                var go = new GameObject("Icon_" + icon);
+                go.transform.SetParent(board, false);
+                go.transform.localPosition = new Vector3(-width * 0.5f + 0.3f, y, 0f);   // left edge
+                go.transform.localRotation = Quaternion.identity;
+                go.transform.localScale = Vector3.one * 0.36f;
+                var sr = go.AddComponent<SpriteRenderer>();
+                sr.sprite = sprite;
+                sr.color = iconColor;
+            }
+            var t = Label(board, "Row_" + icon, UiKit.Number, 5f, Text, new Vector2(0.45f, y), TextAlignmentOptions.Left, width - 0.9f);
+            y -= 0.55f;
+            return t;
+        }
+
+        void Update()
+        {
+            var game = TDGame.Instance;
+            if (game == null || ante == null) return;
+            Set(ante, ref lastAnte, $"ANTE {game.Ante}");
+            Set(wave, ref lastWave, $"WAVE {game.WaveInAnte} / {game.config.wavesPerAnte}");
+            hint.text = Hint(game);
+            Set(gold, ref lastGold, $"GOLD  {game.Gold}");
+            Set(lives, ref lastLives, $"LIVES  {game.Lives}");
+            Set(towers, ref lastTowers, $"TOWERS  {Tower.All.Count}/{game.TowerLimit}");
+            Set(machines, ref lastMachines, $"MACHINES  {BuffMachine.All.Count}/{game.MachineLimit}{(game.MachineStock.Count > 0 ? $"  +{game.MachineStock.Count}" : "")}");
+            Set(discards, ref lastDiscards, $"DISCARDS  {game.Hand.DiscardsLeft}");
+            deck.text = $"DECK  {game.Hand.DeckCount}";
+            bool fight = game.Current == TDGame.Phase.Deploy || game.Current == TDGame.Phase.Wave;
+            if (!fight) combos.text = "<color=#BBA88F>Shown during the battle turn.</color>";
+        }
+
+        static string Hint(TDGame game)
+        {
+            if (game.PickingHandForItem >= 0) return "<color=#FFD860>PICK A HAND IN COMBOS (ESC CANCELS)</color>";
+            switch (game.Current)
+            {
+                case TDGame.Phase.Deploy:
+                    return game.CanStartWave ? "READY: PRESS START WAVE (SPACE)" : "<color=#FF9C7A>PUT A CARD ON A TOWER TO START</color>";
+                case TDGame.Phase.Wave: return "WAVE IN PROGRESS";
+                case TDGame.Phase.Shop: return "SHOP: BUY, THEN CONTINUE";
+                case TDGame.Phase.GameOver: return "<color=#FF7060>GAME OVER: PRESS R</color>";
+            }
+            return "";
+        }
+
+        /// <summary>Sets the text; a changed value gets a punch (not on the first frame).</summary>
+        static void Set(TextMeshPro t, ref string last, string value)
+        {
+            if (value == last) return;
+            bool first = last == null;
+            last = value;
+            t.text = value;
+            if (first) return;
+            t.transform.DOComplete();
+            t.transform.DOPunchScale(Vector3.one * 0.25f, 0.35f, 6, 0.8f).SetLink(t.gameObject);
+        }
+    }
+}

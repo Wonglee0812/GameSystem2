@@ -11,7 +11,7 @@ namespace PokerTD
     /// So the place of a tower decides the order of its buffs, and the order matters:
     /// +mult before xmult gives more damage than the other way round (as in Balatro).
     /// Two machines that put the same ring number on one tower: the machine built first goes first.
-    /// Graybox: built from primitives.
+    /// Look: Kenney round tower base with crystals in the buff colour; graybox primitives when the art asset is missing.
     /// </summary>
     public class BuffMachine : MonoBehaviour
     {
@@ -36,7 +36,10 @@ namespace PokerTD
             m.material = material;
             m.BuildOrder = ++built;
             m.BuildBody();
+            if (BoardTransition.Instance != null) go.transform.SetParent(BoardTransition.Instance.board, true);   // sinks with the board in the shop turn
             All.Add(m);
+            Juice.Built(go.transform);
+            Juice.Built(go.transform, UI.UiKit.MachineFace(System.Array.IndexOf(TDGame.Instance.config.buffs, type)));
             return m;
         }
 
@@ -46,20 +49,32 @@ namespace PokerTD
         void BuildBody()
         {
             Color c = Type.color;
-            Part(PrimitiveType.Cylinder, new Vector3(0f, 0.25f, 0f), new Vector3(1.2f, 0.25f, 1.2f), c * 0.6f);
-            Part(PrimitiveType.Cube, new Vector3(0f, 0.85f, 0f), new Vector3(0.7f, 0.7f, 0.7f), c);
-            Part(PrimitiveType.Sphere, new Vector3(0f, 1.45f, 0f), Vector3.one * 0.45f, Color.Lerp(c, Color.white, 0.5f));
+            float labelY = 2.2f;
+            var art = PTDArt.I;
+            if (art != null && art.machineBase != null)
+            {
+                float y = PTDArt.Stack(transform, 0f, 1.5f, art.machineBase);
+                y = PTDArt.Stack(transform, y, 1.3f, art.machineCrystals, out Transform crystals);
+                PTDArt.Tint(crystals, Color.Lerp(c, Color.white, 0.25f));
+                labelY = y + 0.45f;
+            }
+            else
+            {
+                Part(PrimitiveType.Cylinder, new Vector3(0f, 0.25f, 0f), new Vector3(1.2f, 0.25f, 1.2f), c * 0.6f);
+                Part(PrimitiveType.Cube, new Vector3(0f, 0.85f, 0f), new Vector3(0.7f, 0.7f, 0.7f), c);
+                Part(PrimitiveType.Sphere, new Vector3(0f, 1.45f, 0f), Vector3.one * 0.45f, Color.Lerp(c, Color.white, 0.5f));
+            }
 
             guide = RingGuide.Create(transform, RingFaint);
             guide.Show(false);
 
             var lab = new GameObject("BuffLabel");
             lab.transform.SetParent(transform, false);
-            lab.transform.localPosition = Vector3.up * 2.2f;
+            lab.transform.localPosition = Vector3.up * labelY;
             label = lab.AddComponent<TextMeshPro>();
-            label.text = Type.Short;
-            label.fontSize = 5f;
-            label.fontStyle = FontStyles.Bold;
+            label.text = Type.Short.ToUpper();
+            UI.UiKit.SetFont(label, UI.UiKit.Number, 0.2f);   // same font as the rest of the game (Wong, 2026-11-24)
+            label.fontSize = 4.2f;
             label.alignment = TextAlignmentOptions.Center;
             label.color = Color.Lerp(c, Color.white, 0.4f);
             label.rectTransform.sizeDelta = new Vector2(3f, 1f);

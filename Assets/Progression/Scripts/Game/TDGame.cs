@@ -148,10 +148,15 @@ namespace PokerTD
             var locked = new List<HandType>();
             var open = new List<HandType>();
             foreach (var h in config.hands) (IsUnlocked(h.hand) ? open : locked).Add(h.hand);
-            for (int i = 0; i < config.shopOffers; i++)
+            // one zone each in the 3D shop: machines, items, then upgrades (hand levels, slots, unlocks by weight)
+            for (int i = 0; i < config.shopMachineOffers; i++)
+                Offers.Add(new ShopOffer { kind = OfferKind.Machine, machine = config.buffs[UnityEngine.Random.Range(0, config.buffs.Length)] });
+            for (int i = 0; i < config.shopItemOffers; i++)
+                Offers.Add(new ShopOffer { kind = OfferKind.Item, item = config.items[UnityEngine.Random.Range(0, config.items.Length)] });
+            for (int i = 0; i < config.shopUpgradeOffers; i++)
             {
                 float unlockW = locked.Count > 0 && !Offers.Exists(o => o.kind == OfferKind.Unlock) ? config.unlockWeight : 0f;
-                float[] w = { config.machineWeight, config.handLevelWeight, config.itemWeight, config.towerSlotWeight, config.machineSlotWeight, unlockW };
+                float[] w = { 0f, open.Count > 0 ? config.handLevelWeight : 0f, 0f, config.towerSlotWeight, config.machineSlotWeight, unlockW };
                 float total = 0f; foreach (float x in w) total += x;
                 float roll = UnityEngine.Random.value * total;
                 int k = 0;

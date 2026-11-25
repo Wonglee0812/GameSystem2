@@ -1,0 +1,167 @@
+using System.Collections.Generic;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace PokerTD.UI
+{
+    /// <summary>
+    /// Shared look for the Poker TD UI: fonts, sprites, colours, button style and one tooltip.
+    /// Fonts: Action Comics for titles and buttons (capitals only, so labels are upper case),
+    /// Super Chips for numbers and small text. Sprites are made by progress/patches/make_ui_art.py.
+    /// </summary>
+    public static class UiKit
+    {
+        public static readonly Color Cream = new Color(0.98f, 0.95f, 0.88f);
+        public static readonly Color Ink = new Color(0.18f, 0.18f, 0.18f);
+        public static readonly Color Gold = new Color(1f, 0.78f, 0.25f);
+        public static readonly Color Orange = new Color(0.96f, 0.55f, 0.16f);
+        public static readonly Color Red = new Color(0.86f, 0.25f, 0.22f);
+        public static readonly Color Blue = new Color(0.25f, 0.5f, 0.9f);
+        public static readonly Color Green = new Color(0.3f, 0.72f, 0.4f);
+        public static readonly Color Wood = new Color(0.45f, 0.27f, 0.16f);
+
+        static TMP_FontAsset title, body, number;
+        public static TMP_FontAsset Title => title != null ? title : title = Resources.Load<TMP_FontAsset>("Fonts/Action Comics Black SDF");
+        public static TMP_FontAsset Body => body != null ? body : body = Resources.Load<TMP_FontAsset>("Fonts/Action Comics SDF");
+        public static TMP_FontAsset Number => number != null ? number : number = Resources.Load<TMP_FontAsset>("Fonts/Super Chips SDF");
+
+        static readonly Dictionary<string, Sprite> sprites = new Dictionary<string, Sprite>();
+        public static Sprite Sprite(string path)
+        {
+            if (!sprites.TryGetValue(path, out Sprite s) || s == null)
+            {
+                s = Resources.Load<Sprite>(path);
+                if (s == null) Debug.LogWarning($"[PokerTD] Missing UI sprite: Resources/{path}");
+                sprites[path] = s;
+            }
+            return s;
+        }
+        public static Sprite Button => Sprite("UI/Button9");
+        public static Sprite Panel => Sprite("UI/Panel9");
+        public static Sprite Pill => Sprite("UI/Pill9");
+        public static Sprite Icon(string name) => Sprite("UI/Icons/" + name);
+
+        /// <summary>Card face for a tower type, a machine (index in config.buffs) or an item.</summary>
+        public static Sprite TowerFace(string towerName)
+        {
+            var s = Resources.Load<Sprite>("BuildCards/Tower_" + towerName);
+            return s != null ? s : Sprite("BuildCards/Machine");
+        }
+        public static Sprite MachineFace(int buffIndex)
+        {
+            var s = Resources.Load<Sprite>("BuildCards/Machine_" + buffIndex);
+            return s != null ? s : Sprite("BuildCards/Machine");
+        }
+        public static Sprite ItemFace => Sprite("BuildCards/Item");
+
+        /// <summary>Chunky coloured button with Wong's hover/press animation (PolishButton).</summary>
+        public static void StyleButton(Button b, Color color, float fontSize, float hoverScale = 1.1f)
+        {
+            var pb = b.GetComponent<PolishButton>();
+            if (pb == null) pb = b.gameObject.AddComponent<PolishButton>();
+            pb.hoverScale = hoverScale;
+            var img = pb.VisualImage;
+            img.sprite = Button;
+            img.type = Image.Type.Sliced;
+            img.pixelsPerUnitMultiplier = 1.6f;
+            img.color = Color.white;
+            var colors = b.colors;
+            colors.normalColor = color;
+            colors.highlightedColor = Color.Lerp(color, Color.white, 0.15f);
+            colors.pressedColor = Color.Lerp(color, Color.black, 0.15f);
+            colors.selectedColor = color;
+            colors.disabledColor = Color.Lerp(color, new Color(0.5f, 0.5f, 0.5f), 0.7f) * new Color(1f, 1f, 1f, 0.8f);
+            colors.colorMultiplier = 1f;
+            b.colors = colors;
+            b.transition = Selectable.Transition.ColorTint;
+            foreach (var t in b.GetComponentsInChildren<TMP_Text>(true)) StyleLabel(t, fontSize);
+        }
+
+        public static void StyleLabel(TMP_Text t, float fontSize)
+        {
+            t.font = Title;
+            // Action Comics draws far bigger than its size, so let TMP shrink it to fit the button
+            t.enableAutoSizing = true;
+            t.fontSizeMax = fontSize * 0.62f;
+            t.fontSizeMin = 8f;
+            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.fontStyle = FontStyles.UpperCase;
+            t.color = Color.white;
+            t.alignment = TextAlignmentOptions.Center;
+            t.outlineWidth = 0.22f;
+            t.outlineColor = new Color32(40, 30, 25, 255);
+            var rt = t.rectTransform;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = new Vector2(6f, 8f); rt.offsetMax = new Vector2(-6f, -2f);   // a little up: the button has a lip at the bottom
+        }
+
+        public static TextMeshProUGUI NewText(Transform parent, string name, TMP_FontAsset font, float size, Color color)
+        {
+            var t = new GameObject(name, typeof(RectTransform)).AddComponent<TextMeshProUGUI>();
+            t.rectTransform.SetParent(parent, false);
+            t.font = font;
+            t.fontSize = size;
+            t.color = color;
+            t.alignment = TextAlignmentOptions.Center;
+            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.raycastTarget = false;
+            return t;
+        }
+
+        public static Image NewImage(Transform parent, string name, Sprite sprite, Color color, bool sliced = false)
+        {
+            var img = new GameObject(name, typeof(RectTransform), typeof(Image)).GetComponent<Image>();
+            img.rectTransform.SetParent(parent, false);
+            img.sprite = sprite;
+            img.color = color;
+            img.raycastTarget = false;
+            if (sliced) { img.type = Image.Type.Sliced; img.pixelsPerUnitMultiplier = 1.6f; }
+            return img;
+        }
+
+        // ---- one shared tooltip on the HUD canvas ----
+        static RectTransform tip;
+        static TextMeshProUGUI tipText;
+
+        /// <summary>Shows a dark tooltip above the given screen point (call every frame while hovering).</summary>
+        public static void ShowTip(string text, Vector2 screen)
+        {
+            if (tip == null) BuildTip();
+            if (tip == null) return;
+            tipText.text = text;
+            Vector2 size = tipText.GetPreferredValues(text);
+            tip.sizeDelta = new Vector2(Mathf.Min(size.x, 420f) + 28f, tipText.GetPreferredValues(text, Mathf.Min(size.x, 420f), 0f).y + 22f);
+            var canvas = tip.GetComponentInParent<Canvas>();
+            float scale = canvas != null ? canvas.scaleFactor : 1f;
+            float w = tip.sizeDelta.x * scale, h = tip.sizeDelta.y * scale;
+            float x = Mathf.Clamp(screen.x - w * 0.5f, 8f, Screen.width - w - 8f);
+            float y = Mathf.Clamp(screen.y + 20f, 8f, Screen.height - h - 8f);
+            tip.position = new Vector2(x, y);
+            if (!tip.gameObject.activeSelf) tip.gameObject.SetActive(true);
+            tip.SetAsLastSibling();
+        }
+
+        public static void HideTip()
+        {
+            if (tip != null && tip.gameObject.activeSelf) tip.gameObject.SetActive(false);
+        }
+
+        static void BuildTip()
+        {
+            var hud = Object.FindFirstObjectByType<TDHud>();
+            if (hud == null) return;
+            var img = NewImage(hud.transform, "UiTip", Panel, new Color(0.12f, 0.1f, 0.1f, 0.95f), true);
+            tip = img.rectTransform;
+            tip.anchorMin = tip.anchorMax = Vector2.zero;
+            tip.pivot = Vector2.zero;
+            tipText = NewText(tip, "Text", Number, 22f, Cream);
+            tipText.alignment = TextAlignmentOptions.TopLeft;
+            tipText.textWrappingMode = TextWrappingModes.Normal;
+            var r = tipText.rectTransform;
+            r.anchorMin = Vector2.zero; r.anchorMax = Vector2.one;
+            r.offsetMin = new Vector2(14f, 10f); r.offsetMax = new Vector2(-14f, -10f);
+            tip.gameObject.SetActive(false);
+        }
+    }
+}

@@ -166,6 +166,8 @@ namespace PokerTD
         [Header("Shop (step 5)")]
         [Tooltip("Random offers in the shop after each wave (machines, hand upgrades, slots, items, unlocks).")]
         public int shopOffers = 4;
+        [Tooltip("3D shop (Wong, 2026-11-24): offers per zone. Upgrades = hand levels, slots and unlocks (by the weights below).")]
+        public int shopMachineOffers = 3, shopItemOffers = 3, shopUpgradeOffers = 3;
         [Tooltip("Chance weights of each offer kind. Unlocks only roll while a hand is still locked.")]
         public float machineWeight = 40f, handLevelWeight = 25f, itemWeight = 20f, towerSlotWeight = 6f, machineSlotWeight = 6f, unlockWeight = 3f;
         public int handLevelCost = 4;

@@ -1,0 +1,49 @@
+using System.Collections;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace PokerTD.UI
+{
+    /// <summary>
+    /// New HUD layout (2026-11-24): adds the 3D boards (WorldHud), the build cards (bottom left)
+    /// and the item cards (top left), and moves every button to the bottom right next to the
+    /// deck, styled with UiKit and Wong's button animation. It waits one frame, so the other HUD
+    /// scripts have made their buttons first.
+    /// </summary>
+    public class HudLayout : MonoBehaviour
+    {
+        IEnumerator Start()
+        {
+            gameObject.AddComponent<WorldHud>();
+            gameObject.AddComponent<BuildCardBar>();
+            gameObject.AddComponent<ItemCardBar>();
+            yield return null;
+
+            // bottom right: buttons in a column, the deck pile to their right (HandView.deckPosition)
+            Place("StartWave", new Vector2(-232f, 28f), new Vector2(250f, 86f), UiKit.Orange, 34f, 1.08f);
+            Place("Discard", new Vector2(-232f, 126f), new Vector2(250f, 70f), UiKit.Red, 28f, 1.1f);
+            Place("Sort: Suit", new Vector2(-232f, 208f), new Vector2(122f, 54f), UiKit.Blue, 18f, 1.2f);
+            Place("Sort: Rank", new Vector2(-360f, 208f), new Vector2(122f, 54f), UiKit.Blue, 18f, 1.2f);
+            Place("EarlyBurstToggle", new Vector2(-232f, 274f), new Vector2(250f, 50f), UiKit.Wood, 16f, 1.1f);
+
+            var continueButton = transform.Find("ShopPanel/Continue")?.GetComponent<Button>();
+            if (continueButton != null) UiKit.StyleButton(continueButton, UiKit.Orange, 30f, 1.1f);
+
+            var deckCount = transform.Find("Hand/DeckPile/Count")?.GetComponent<TMP_Text>();
+            if (deckCount != null) { deckCount.font = UiKit.Number; deckCount.color = UiKit.Cream; }
+        }
+
+        void Place(string name, Vector2 pos, Vector2 size, Color color, float fontSize, float hoverScale)
+        {
+            var t = transform.Find(name);
+            if (t == null) { Debug.LogWarning($"[PokerTD] HudLayout: no button '{name}'"); return; }
+            var rt = (RectTransform)t;
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(1f, 0f);
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = size;
+            var b = t.GetComponent<Button>();
+            if (b != null) UiKit.StyleButton(b, color, fontSize, hoverScale);
+        }
+    }
+}

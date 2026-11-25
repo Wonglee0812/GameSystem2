@@ -1,0 +1,292 @@
+using System.Collections.Generic;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace PokerTD.UI
+{
+    /// <summary>
+    /// The hand of cards at the bottom of the screen in the battle turn, fanned out like
+    /// in Balatro. It mirrors TDGame.Hand: select cards and press Discard to swap them,
+    /// or drag a card onto a tower to give it that card.
+    /// Each card keeps its own CardView while it stays in the hand, so it can slide to a
+    /// new place (sort, discard), and new cards are dealt from the deck pile.
+    /// </summary>
+    public class HandView : MonoBehaviour
+    {
+        public RectTransform area;
+        public CardView template;
+        public Button discardButton;
+        public TMP_Text discardLabel;
+
+        [Header("Layout")]
+        public Vector2 cardSize = new Vector2(132f, 200f);
+        public float spacing = 125f;
+        [Tooltip("The whole fan is never wider than this; more cards overlap more.")]
+        public float maxHandWidth = 980f;
+        public float fanAngle = 3.5f;
+        public float fanDrop = 4f;
+        public float selectedLift = 40f;
+        public float dealDelay = 0.07f;
+
+        [Header("Deck pile")]
+        public Vector2 deckPosition = new Vector2(-640f, -10f);
+        public Vector2 discardTarget = new Vector2(1150f, 260f);
+
+        readonly List<CardView> views = new List<CardView>();
+        Button sortRank, sortSuit;
+        Tower dropTarget;
+        bool wasShown;
+        RectTransform deckPile;
+        TMP_Text deckCount;
+
+        // set just before Hand.Assign, read by Rebuild: where the cards fly to / come from
+        Vector2? assignTowerLocal;
+        Card? assignedCard, returnedCard;
+
+        CardHand Hand => TDGame.Instance.Hand;
+
+        public static HandView Instance { get; private set; }
+
+        void Awake() => Instance = this;
+
+        public bool AnyDragging
+        {
+            get
+            {
+                foreach (var v in views) if (v != null && v.Dragging) return true;
+                return false;
+            }
+        }
+
+        void Start()
+        {
+            template.gameObject.SetActive(false);
+            ((RectTransform)template.transform).sizeDelta = cardSize;
+            Hand.Changed += Rebuild;
+            discardButton.onClick.AddListener(() => Hand.Discard());
+            // the "Burst at best hand" toggle sits right above Start Wave, so Discard goes one row higher
+            var drt0 = (RectTransform)discardButton.transform;
+            drt0.anchoredPosition = new Vector2(drt0.anchoredPosition.x, 214f);
+            sortRank = SortButton("Sort: Rank", -40f, () => Hand.Sort(false));
+            sortSuit = SortButton("Sort: Suit", -200f, () => Hand.Sort(true));
+            BuildDeckPile();
+            Rebuild();
+        }
+
+        void OnDestroy()
+        {
+            if (TDGame.Instance != null) Hand.Changed -= Rebuild;
+        }
+
+        void Update()
+        {
+            var game = TDGame.Instance;
+            bool show = game.Current == TDGame.Phase.Deploy && (BoardTransition.Instance == null || !BoardTransition.Instance.Busy);
+            area.gameObject.SetActive(show);
+            discardButton.gameObject.SetActive(show);
+            sortRank.gameObject.SetActive(show);
+            sortSuit.gameObject.SetActive(show);
+            if (show && !wasShown) DealAll();
+            wasShown = show;
+
+            discardLabel.text = $"Discard  ({Hand.DiscardsLeft})";
+            deckCount.text = Hand.DeckCount.ToString();
+            MarkActive(sortRank, Hand.Mode == CardHand.SortMode.Rank);
+            MarkActive(sortSuit, Hand.Mode == CardHand.SortMode.Suit);
+            discardButton.interactable = Hand.DiscardsLeft > 0 && Hand.Selected.Count > 0;
+        }
+
+        /// <summary>The active sort button gets an orange label, so the player sees which order is on (dark grey = off).</summary>
+        static void MarkActive(Button b, bool on)
+        {
+            var t = b.GetComponentInChildren<TMP_Text>();
+            t.color = on ? new Color(0.95f, 0.55f, 0.1f) : new Color(0.2f, 0.2f, 0.22f);
+        }
+
+        /// <summary>A small copy of the discard button, in a row above it.</summary>
+        Button SortButton(string label, float x, UnityEngine.Events.UnityAction action)
+        {
+            var b = Instantiate(discardButton, discardButton.transform.parent);
+            b.name = label;
+            b.onClick.RemoveAllListeners();
+            b.onClick.AddListener(action);
+            b.interactable = true;
+            var rt = (RectTransform)b.transform;
+            var drt = (RectTransform)discardButton.transform;
+            rt.sizeDelta = new Vector2(150f, 60f);
+            rt.anchoredPosition = new Vector2(x, drt.anchoredPosition.y + drt.sizeDelta.y + 12f);
+            var t = b.GetComponentInChildren<TMP_Text>();
+            t.text = label; t.fontSize = 22f;
+            ((RectTransform)t.transform).sizeDelta = rt.sizeDelta;
+            return b;
+        }
+
+        /// <summary>A small stack of card backs where new cards come from, with the number of cards left.</summary>
+        void BuildDeckPile()
+        {
+            deckPile = new GameObject("DeckPile", typeof(RectTransform)).GetComponent<RectTransform>();
+            deckPile.SetParent(area, false);
+            deckPile.SetSiblingIndex(1);
+            deckPile.anchoredPosition = deckPosition;
+            deckPile.sizeDelta = cardSize * 0.85f;
+            for (int i = 0; i < 3; i++)
+            {
+                var back = new GameObject("Back" + i, typeof(RectTransform), typeof(Image)).GetComponent<RectTransform>();
+                back.SetParent(deckPile, false);
+                back.anchorMin = Vector2.zero; back.anchorMax = Vector2.one;
+                back.offsetMin = back.offsetMax = Vector2.zero;
+                back.anchoredPosition = new Vector2(-i * 3f, i * 3f);
+                var img = back.GetComponent<Image>();
+                img.sprite = CardArt.Back;
+                img.raycastTarget = false;
+                if (i == 0) img.color = new Color(0f, 0f, 0f, 0.35f);   // shadow
+            }
+            var label = new GameObject("Count", typeof(RectTransform)).AddComponent<TextMeshProUGUI>();
+            label.rectTransform.SetParent(deckPile, false);
+            label.rectTransform.anchoredPosition = new Vector2(0f, -cardSize.y * 0.5f - 10f);
+            label.rectTransform.sizeDelta = new Vector2(160f, 40f);
+            label.alignment = TextAlignmentOptions.Center;
+            label.fontSize = 26f;
+            label.raycastTarget = false;
+            deckCount = label;
+        }
+
+        void Rebuild()
+        {
+            var cards = Hand.Cards;
+            var old = new List<CardView>(views);
+            views.Clear();
+            bool animate = area.gameObject.activeInHierarchy;
+            int dealt = 0;
+
+            for (int i = 0; i < cards.Count; i++)
+            {
+                CardView v = null;
+                for (int k = 0; k < old.Count; k++)
+                    if (old[k] != null && old[k].card.Equals(cards[i])) { v = old[k]; old.RemoveAt(k); break; }
+
+                if (v == null)
+                {
+                    v = Instantiate(template, area);
+                    v.gameObject.SetActive(true);
+                    v.hand = this;
+                    v.index = i;
+                    v.card = cards[i];
+                    if (returnedCard.HasValue && returnedCard.Value.Equals(cards[i]) && assignTowerLocal.HasValue)
+                        v.ComeFrom(assignTowerLocal.Value);
+                    else
+                        v.DealFrom(deckPosition, animate ? dealt++ * dealDelay : 0f);
+                }
+                else if (v.index != i) v.Swap(i > v.index ? -1f : 1f);
+                views.Add(v);
+            }
+
+            // cards that left the hand: onto a tower, or thrown away
+            int thrown = 0;
+            foreach (var v in old)
+            {
+                if (v == null) continue;
+                bool toTower = assignedCard.HasValue && assignedCard.Value.Equals(v.card) && assignTowerLocal.HasValue;
+                if (!animate) { Destroy(v.gameObject); continue; }
+                if (toTower) v.Leave(assignTowerLocal.Value, true, 0f);
+                else v.Leave(discardTarget, false, thrown++ * 0.05f);
+            }
+            assignTowerLocal = null; assignedCard = null; returnedCard = null;
+
+            Layout();
+        }
+
+        /// <summary>Places the cards in a fan; more cards overlap more.</summary>
+        void Layout()
+        {
+            int n = views.Count;
+            float step = n > 1 ? Mathf.Min(spacing, maxHandWidth / (n - 1)) : 0f;
+            for (int i = 0; i < n; i++)
+            {
+                var v = views[i];
+                float mid = i - (n - 1) / 2f;
+                bool selected = Hand.Selected.Contains(i);
+                v.index = i;
+                v.restPosition = new Vector2(mid * step, -mid * mid * fanDrop + (selected ? selectedLift : 0f));
+                v.restAngle = -mid * fanAngle;
+                if (!v.Dragging) v.transform.SetSiblingIndex(i + 2);   // 0 = template, 1 = deck pile
+                v.Show(Hand.Cards[i], selected);
+            }
+        }
+
+        /// <summary>The hand appears (start of a turn): every card is dealt again from the deck pile.</summary>
+        void DealAll()
+        {
+            for (int i = 0; i < views.Count; i++) views[i].DealFrom(deckPosition, 0.15f + i * dealDelay);
+        }
+
+        public void Click(int index) => Hand.Toggle(index);
+
+        public void BeginDrag(int index) { }
+
+        /// <summary>While dragging: light up the tower under the pointer.</summary>
+        public void Dragging(Vector2 screen)
+        {
+            var t = TowerAt(screen);
+            if (t == dropTarget) return;
+            if (dropTarget != null) dropTarget.Highlight(false);
+            dropTarget = t;
+            if (dropTarget != null) dropTarget.Highlight(true);
+        }
+
+        public void EndDrag(int index, Vector2 screen)
+        {
+            if (dropTarget != null) dropTarget.Highlight(false);
+            dropTarget = null;
+            var tower = TowerAt(screen);
+            if (tower != null && index >= 0 && index < Hand.Cards.Count)
+            {
+                assignTowerLocal = TowerLocal(tower);
+                assignedCard = Hand.Cards[index];
+                returnedCard = tower.HasCard ? tower.Card : (Card?)null;
+                Hand.Assign(index, tower);
+            }
+            else Layout();   // snap back
+        }
+
+        Vector2 TowerLocal(Tower tower)
+        {
+            var cam = Camera.main;
+            Vector3 screen = cam != null ? cam.WorldToScreenPoint(tower.transform.position) : Vector3.zero;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(area, screen, null, out Vector2 local);
+            return local;
+        }
+
+        /// <summary>Click-to-place: the first selected card flies onto the clicked tower.</summary>
+        public void AssignSelected(Tower tower)
+        {
+            if (tower == null || Hand.Selected.Count == 0) return;
+            int index = int.MaxValue;
+            foreach (int i in Hand.Selected) index = Mathf.Min(index, i);
+            if (index >= Hand.Cards.Count) return;
+            assignTowerLocal = TowerLocal(tower);
+            assignedCard = Hand.Cards[index];
+            returnedCard = tower.HasCard ? tower.Card : (Card?)null;
+            Hand.AssignFirstSelected(tower);
+        }
+
+        /// <summary>A tower's card is about to come back to the hand: it flies from the tower, not from the deck.</summary>
+        public void NoteReturnFrom(Tower tower)
+        {
+            if (tower == null || !tower.HasCard) return;
+            assignTowerLocal = TowerLocal(tower);
+            returnedCard = tower.Card;
+        }
+
+        static Tower TowerAt(Vector2 screen)
+        {
+            var cam = Camera.main;
+            if (cam == null) return null;
+            Ray ray = cam.ScreenPointToRay(screen);
+            if (!Physics.Raycast(ray, out RaycastHit hit, 200f)) return null;
+            var node = hit.collider.GetComponent<BuildNode>();
+            return node != null ? node.tower : null;
+        }
+    }
+}

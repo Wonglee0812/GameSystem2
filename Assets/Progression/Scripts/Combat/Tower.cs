@@ -10,7 +10,7 @@ namespace PokerTD
     /// - Gatling: fast shots, one enemy each.
     /// - Trap: lies on the path and marks every enemy inside its circle each pulse.
     /// Towers target the enemy closest to the base. A stunned tower does nothing.
-    /// Graybox: built from primitives.
+    /// Look: Kenney Tower Defense Kit (CC0) body + weapon; graybox primitives when the art asset is missing.
     /// </summary>
     public class Tower : MonoBehaviour
     {
@@ -23,11 +23,16 @@ namespace PokerTD
 
         Transform turret;
         TextMeshPro label;
+        WorldCard cardView;   // the tower's card as a sprite above it
         float cooldown;
         readonly Dictionary<Enemy, float> lastShot = new Dictionary<Enemy, float>();
         float stunnedUntil;
         Material material;
         RangeRing ring;
+        const float cardBack = 0.9f;   // card offset behind the tower
+        Transform spikes;          // spike trap: spikes that pop up on each pulse
+        float spikeTime = -10f;
+        static Mesh spikeMesh;
         static readonly Color RingColor = new Color(1f, 1f, 1f, 0.45f);
         static readonly Color RingHover = new Color(1f, 0.9f, 0.4f, 0.9f);
 
@@ -39,13 +44,18 @@ namespace PokerTD
             t.Type = type;
             t.material = material;
             t.BuildBody();
+            if (BoardTransition.Instance != null) go.transform.SetParent(BoardTransition.Instance.board, true);   // sinks with the board in the shop turn
             All.Add(t);
+            Juice.Built(go.transform);
+            Juice.Built(go.transform, UI.UiKit.TowerFace(type.name), t);   // the tower card waits on the tile for a poker card
             return t;
         }
 
         void BuildBody()
         {
             Color c = Type.color;
+            float cardY = BuildKenney();
+            if (cardY < 0f)
             switch (Type.kind)
             {
                 case TDConfig.TowerKind.Cannon:
@@ -71,14 +81,94 @@ namespace PokerTD
 
             var lab = new GameObject("CardLabel");
             lab.transform.SetParent(transform, false);
-            lab.transform.localPosition = Vector3.up * (Type.kind == TDConfig.TowerKind.Trap ? 1.0f : 2.0f);
+            lab.transform.localPosition = Vector3.up * (cardY > 0f ? cardY : Type.kind == TDConfig.TowerKind.Trap ? 1.0f : 2.0f);
             label = lab.AddComponent<TextMeshPro>();
-            label.fontSize = 6f;
-            label.fontStyle = FontStyles.Bold;
+            UI.UiKit.SetFont(label, UI.UiKit.Number, 0.2f);   // same font as the rest of the game
+            label.fontSize = 5f;
             label.alignment = TextAlignmentOptions.Center;
             label.rectTransform.sizeDelta = new Vector2(3f, 1f);
+            // a little behind the tower (away from the camera), so from the tilted view the card does not cover the weapon (Wong, 2026-11-24)
+            lab.transform.localPosition += Vector3.forward * cardBack;
+            cardView = WorldCard.Create(transform, lab.transform.localPosition, 0.9f, 10);
+            cardView.gameObject.SetActive(false);
+            lab.transform.localPosition += Vector3.up * 0.85f;   // "zzz" and "?" above the card
             UpdateLabel();
         }
+
+        /// <summary>Kenney look: a stacked tower body with the weapon on a turning turret.
+        /// Cannon = round tower + cannon, Gatling = square tower + turret, Trap = low base + catapult on the path.
+        /// Returns the height for the card above it, or -1 when the art asset is missing (graybox then).</summary>
+        float BuildKenney()
+        {
+            var art = PTDArt.I;
+            if (art == null) return -1f;
+            const float S = 1.5f;
+            float y;
+            GameObject weapon;
+            float ws = S;
+            switch (Type.kind)
+            {
+                case TDConfig.TowerKind.Cannon:
+                    y = PTDArt.Stack(transform, 0f, S, art.cannonBase);
+                    weapon = art.cannonWeapon;
+                    break;
+                case TDConfig.TowerKind.Gatling:
+                    y = PTDArt.Stack(transform, 0f, S, art.gatlingBase, art.gatlingTop);
+                    weapon = art.gatlingWeapon;
+                    break;
+                default:   // spike trap: a metal plate on the path with spikes in the hole
+                    y = PTDArt.Stack(transform, 0f, 1.8f, art.trapBase);
+                    spikes = BuildSpikes(art.spikeMaterial, y);
+                    return y + 0.6f + 0.95f;   // card fully above the spikes
+            }
+            turret = new GameObject("Turret").transform;
+            turret.SetParent(transform, false);
+            turret.localPosition = Vector3.up * y;
+            float top = PTDArt.Stack(turret, 0f, ws, weapon);
+            return y + top + 0.95f;   // card (half height 0.68) fully above the weapon
+        }
+
+        /// <summary>3 x 3 metal spikes (square pyramids, flat shaded). Mostly hidden in the plate; they pop up on a pulse.</summary>
+        Transform BuildSpikes(Material mat, float y)
+        {
+            if (spikeMesh == null)
+            {
+                const float r = 0.09f, h = 0.6f;
+                Vector3[] c = { new Vector3(-r, 0f, -r), new Vector3(r, 0f, -r), new Vector3(r, 0f, r), new Vector3(-r, 0f, r) };
+                Vector3 top = new Vector3(0f, h, 0f);
+                var v = new List<Vector3>();
+                for (int i = 0; i < 4; i++) { v.Add(c[i]); v.Add(top); v.Add(c[(i + 1) % 4]); }
+                var t = new int[v.Count];
+                for (int i = 0; i < t.Length; i++) t[i] = i;
+                spikeMesh = new Mesh { name = "Spike" };
+                spikeMesh.SetVertices(v);
+                spikeMesh.SetTriangles(t, 0);
+                spikeMesh.RecalculateNormals();
+                spikeMesh.RecalculateBounds();
+            }
+            var holder = new GameObject("Spikes").transform;
+            holder.SetParent(transform, false);
+            holder.localPosition = Vector3.up * (y - 0.12f);
+            for (int i = -1; i <= 1; i++)
+                for (int j = -1; j <= 1; j++)
+                {
+                    var s = new GameObject("Spike");
+                    s.transform.SetParent(holder, false);
+                    s.transform.localPosition = new Vector3(i * 0.22f, 0f, j * 0.22f);
+                    s.transform.localScale = Vector3.one * ((i + j) % 2 == 0 ? 1f : 0.8f);
+                    s.AddComponent<MeshFilter>().sharedMesh = spikeMesh;
+                    var mr = s.AddComponent<MeshRenderer>();
+                    mr.sharedMaterial = mat != null ? mat : material;
+                }
+            holder.localScale = new Vector3(1f, 0.45f, 1f);
+            return holder;
+        }
+
+        /// <summary>The weapon model on the turret (null for the trap and the graybox).</summary>
+        public Transform Weapon => turret != null && turret.childCount > 0 ? turret.GetChild(0) : null;
+
+        /// <summary>Where shots start: the front of the weapon.</summary>
+        public Vector3 Muzzle => turret != null ? turret.position + turret.forward * 0.45f + Vector3.up * 0.4f : transform.position + Vector3.up;
 
         GameObject Part(PrimitiveType shape, Transform parent, Vector3 pos, Vector3 scale, Color color, Quaternion? rot = null)
         {
@@ -96,16 +186,24 @@ namespace PokerTD
             return p;
         }
 
+        /// <summary>Juice: the tower card lying on the tile until the first poker card arrives (then the model burns in).</summary>
+        public GameObject Pending { get; set; }
+
         public void SetCard(Card card)
         {
+            Juice.TowerArmed(this);
             Card = card;
             HasCard = true;
+            cardView.gameObject.SetActive(true);
+            cardView.SetCard(card);
+            cardView.PopIn();
             UpdateLabel();
         }
 
         public void ClearCard()
         {
             HasCard = false;
+            if (cardView != null && cardView.gameObject.activeSelf) cardView.DissolveOut(false);
             UpdateLabel();
         }
 
@@ -118,7 +216,8 @@ namespace PokerTD
         void UpdateLabel()
         {
             if (label == null) return;
-            label.text = Stunned ? "<color=#FF8040>zzz</color>" : HasCard ? Card.Rich : "<color=#888888>?</color>";
+            label.text = Stunned ? "<color=#FF8040>zzz</color>" : HasCard ? "" : "<color=#888888>?</color>";
+            if (cardView != null) cardView.SetGrey(Stunned);
         }
 
         /// <summary>Brighter ring while the pointer is over this tower's tile.</summary>
@@ -128,7 +227,15 @@ namespace PokerTD
         {
             if (Camera.main != null) label.transform.rotation = Camera.main.transform.rotation;
             UpdateLabel();
+            bool moving = BoardTransition.Instance != null && BoardTransition.Instance.Busy;   // ring hidden while the floor moves (it is drawn in world space)
+            if (ring != null && ring.gameObject.activeSelf == moving) ring.gameObject.SetActive(!moving);
             cooldown -= Time.deltaTime;
+            if (spikes != null)   // up fast, hold, slowly back down
+            {
+                float st = Time.time - spikeTime;
+                float k = st < 0.08f ? st / 0.08f : Mathf.Clamp01(1f - (st - 0.3f) / 0.35f);
+                spikes.localScale = new Vector3(1f, Mathf.Lerp(0.45f, 1f, k), 1f);
+            }
             if (!HasCard || Stunned || TDGame.Instance.Current != TDGame.Phase.Wave) return;
 
             if (Type.kind == TDConfig.TowerKind.Trap)
@@ -138,7 +245,7 @@ namespace PokerTD
                 bool any = false;
                 foreach (var e in Enemy.All.ToArray())
                     if (Flat(e.transform.position - transform.position) <= Type.areaRadius) { e.Marks.AddMark(Card, this); any = true; }
-                if (any) Pulse();
+                if (any) { Pulse(); cardView.Punch(0.6f); }
                 return;
             }
 
@@ -150,6 +257,8 @@ namespace PokerTD
             cooldown = 1f / Type.fireRate;
             lastShot[target] = Time.time;
             Projectile.Fire(this, target, material);
+            Juice.TowerFired(this);
+            cardView.Punch(0.35f);
         }
 
         /// <summary>
@@ -182,7 +291,12 @@ namespace PokerTD
             return false;
         }
 
-        void Pulse() => FloatText.Show(Card.ToString(), transform.position + Vector3.up * 0.6f, new Color(0.85f, 0.6f, 1f, 0.8f));
+        void Pulse()
+        {
+            spikeTime = Time.time;
+            Juice.TrapPulse(this);
+            FloatText.Show(Card.ToString(), transform.position + Vector3.up * 0.6f, new Color(0.85f, 0.6f, 1f, 0.8f));
+        }
 
         static float Flat(Vector3 v) { v.y = 0f; return v.magnitude; }
 

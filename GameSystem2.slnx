@@ -1,7 +1,10 @@
 ﻿<Solution>
+  <Project Path="BrickPanic.Editor.csproj" />
+  <Project Path="BrickPanic.csproj" />
   <Project Path="WindPet.csproj" />
   <Project Path="DamRush.csproj" />
   <Project Path="PokerTD.csproj" />
+  <Project Path="Assembly-CSharp-firstpass.csproj" />
   <Project Path="DamRush.WaterCompare.csproj" />
   <Project Path="WindPet.Editor.csproj" />
   <Project Path="DamRush.Editor.csproj" />

@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f07eeb895b41cc843a0f33c875ac913e, type: 3}
+  m_Name: MAT_Wood
+  m_EditorClassIdentifier: BrickPanic::BrickPanic.MaterialDef
+  displayName: Wood
+  color: {r: 1, g: 0.78, b: 0.1, a: 1}
+  smoothness: 0.35
+  metallic: 0
+  baseMaterial: {fileID: 2100000, guid: 7289bafbfb50b694ba4017887afac249, type: 2}
+  pricePerStud: 0.1875
+  massPerStud: 1.6
+  breakForcePerStud: 500
+  breakTorquePerStud: 180
+  durability: 20
+  friction: 0.7
+  floats: 1
+  heatSeconds: 4

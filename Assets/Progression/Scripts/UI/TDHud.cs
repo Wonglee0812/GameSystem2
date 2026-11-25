@@ -1,3 +1,4 @@
+using DG.Tweening;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -21,7 +22,9 @@ namespace PokerTD.UI
         public TMP_Text gameOverText;
 
         readonly List<Button> machineButtons = new List<Button>();
-        Button earlyBurst;
+        Image[] zones;
+        float[] zoneAlpha;
+        bool calcShown;
         readonly List<Button> itemButtons = new List<Button>();
         RectTransform calcPanel;
         TextMeshProUGUI calcText;
@@ -30,8 +33,10 @@ namespace PokerTD.UI
         {
             var game = TDGame.Instance;
             int towers = game.config.towers.Length;
-            for (int i = 0; i < towerButtons.Length; i++)
+            // old tower buttons: optional (the new HUD uses BuildCardBar; Wong may delete them)
+            for (int i = 0; towerButtons != null && i < towerButtons.Length; i++)
             {
+                if (towerButtons[i] == null) continue;
                 int index = i;
                 towerButtons[i].onClick.AddListener(() => BuildManager.Instance.Select(index));
                 var t = game.config.towers[i];
@@ -39,14 +44,16 @@ namespace PokerTD.UI
             }
             // buttons for machines bought in the shop and not placed yet: copies of the first
             // tower button in a second column (one per machine slot, hidden when empty)
-            var first = (RectTransform)towerButtons[0].transform;
-            for (int i = 0; i < game.MachineLimit; i++) AddMachineButton(i);
+            // (old machine buttons are not made any more: BuildCardBar shows bought machines)
             BuildCalcPanel();
             gameObject.AddComponent<ComboView>();
             startWave.onClick.AddListener(game.StartWave);
-            BuildEarlyBurstButton();
-            for (int i = 0; i < game.config.itemSlots; i++) AddItemButton(i);
+            // the "burst at best hand" test button is gone (Wong, 2026-11-24); early burst stays on (config)
+            // (old item buttons are not made any more: ItemTable shows the items on the table)
             gameOver.SetActive(false);
+            // new layout: 3D boards, build cards, item cards (the old status line and buttons are hidden)
+            if (status != null) status.gameObject.SetActive(false);
+            if (GetComponent<HudLayout>() == null) gameObject.AddComponent<HudLayout>();
         }
 
         void AddMachineButton(int i)
@@ -94,8 +101,8 @@ namespace PokerTD.UI
             for (int i = 0; i < itemButtons.Count; i++)
             {
                 var b = itemButtons[i];
-                b.gameObject.SetActive(board);
-                if (!board) continue;
+                b.gameObject.SetActive(false);   // replaced by ItemCardBar
+                continue;
                 var t = b.GetComponentInChildren<TMP_Text>();
                 if (i >= game.Items.Count)
                 {
@@ -114,28 +121,6 @@ namespace PokerTD.UI
             }
             var kb = Keyboard.current;
             if (game.PickingHandForItem >= 0 && kb != null && kb.escapeKey.wasPressedThisFrame) game.CancelHandPick();
-        }
-
-        /// <summary>Test button above Start Wave: switches "burst at best hand" on and off during play.</summary>
-        void BuildEarlyBurstButton()
-        {
-            earlyBurst = Instantiate(startWave, startWave.transform.parent);
-            earlyBurst.name = "EarlyBurstToggle";
-            earlyBurst.onClick.RemoveAllListeners();
-            earlyBurst.onClick.AddListener(() =>
-            {
-                TDGame.Instance.BurstAtBestHand = !TDGame.Instance.BurstAtBestHand;
-                // drop UI focus so Space (start wave) does not press this button again
-                if (UnityEngine.EventSystems.EventSystem.current != null) UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(null);
-            });
-            earlyBurst.interactable = true;
-            var rt = (RectTransform)earlyBurst.transform;
-            var srt = (RectTransform)startWave.transform;
-            rt.sizeDelta = new Vector2(srt.sizeDelta.x, 60f);
-            rt.anchoredPosition = srt.anchoredPosition + new Vector2(0f, srt.sizeDelta.y + 12f);
-            var t = earlyBurst.GetComponentInChildren<TMP_Text>();
-            t.fontSize = 22f;
-            ((RectTransform)t.transform).sizeDelta = rt.sizeDelta;
         }
 
         void BuildCalcPanel()
@@ -165,19 +150,19 @@ namespace PokerTD.UI
         {
             var game = TDGame.Instance;
             int towers = game.config.towers.Length;
-            status.text = $"Lives  <b>{game.Lives}</b>     Gold  <b>{game.Gold}</b>     Ante <b>{game.Ante}</b>  ·  Wave {game.WaveInAnte}/{game.config.wavesPerAnte}" +
+            if (status != null && status.gameObject.activeSelf) status.text = $"Lives  <b>{game.Lives}</b>     Gold  <b>{game.Gold}</b>     Ante <b>{game.Ante}</b>  ·  Wave {game.WaveInAnte}/{game.config.wavesPerAnte}" +
                           $"     Towers <b>{Tower.All.Count}/{game.TowerLimit}</b>     Machines <b>{BuffMachine.All.Count}/{game.MachineLimit}</b>{(game.MachineStock.Count > 0 ? $" +{game.MachineStock.Count} in stock" : "")}" +
                           $"\n<size=70%>{(game.Current == TDGame.Phase.Deploy && !game.CanStartWave ? "<color=#FF8060>Drag a card onto at least one tower to start the wave.</color> " : "")}{(game.Current == TDGame.Phase.Deploy ? "Build towers, place bought machines, drag a card onto each tower, then Start Wave (Space). Ring 1 is applied first. Hover a tower to see its burst. Right-click a tower or machine to sell it." : game.Current == TDGame.Phase.Wave ? "Wave in progress" : game.Current == TDGame.Phase.Shop ? "Shop turn" : "")}</size>";
             bool deploy = game.Current == TDGame.Phase.Deploy;
-            for (int i = 0; i < towerButtons.Length; i++)
+            for (int i = 0; towerButtons != null && i < towerButtons.Length; i++)
             {
-                towerButtons[i].gameObject.SetActive(deploy);
+                if (towerButtons[i] == null) continue;
+                towerButtons[i].gameObject.SetActive(false);   // replaced by BuildCardBar
                 towerButtons[i].image.color = BuildManager.Instance.Selected == i ? new Color(1f, 0.85f, 0.4f) : Color.white;
             }
-            while (machineButtons.Count < Mathf.Min(game.MachineStock.Count, 9 - towers)) AddMachineButton(machineButtons.Count);
             for (int i = 0; i < machineButtons.Count; i++)
             {
-                bool has = deploy && i < game.MachineStock.Count;
+                bool has = false;   // replaced by BuildCardBar
                 machineButtons[i].gameObject.SetActive(has);
                 if (!has) continue;
                 var buff = game.MachineStock[i];
@@ -185,24 +170,41 @@ namespace PokerTD.UI
                 machineButtons[i].image.color = BuildManager.Instance.Selected == towers + i ? new Color(1f, 0.85f, 0.4f) : Color.Lerp(buff.color, Color.white, 0.6f);
             }
             UpdateCalcPanel();
-            UpdateItems();
             startWave.interactable = game.CanStartWave;
             bool fight = deploy || game.Current == TDGame.Phase.Wave;
-            earlyBurst.gameObject.SetActive(fight);
-            earlyBurst.GetComponentInChildren<TMP_Text>().text = game.BurstAtBestHand ? "Burst at best hand: <color=#60FF80>ON</color>" : "Burst at best hand: <color=#FF6060>OFF</color>";
+            FadeZones(deploy);
             startWave.gameObject.SetActive(deploy || game.Current == TDGame.Phase.Wave);
             var kb = Keyboard.current;
             if (kb != null && kb.spaceKey.wasPressedThisFrame) game.StartWave();
-            if (game.Current == TDGame.Phase.GameOver && !gameOver.activeSelf)
-            {
-                gameOver.SetActive(true);
-                gameOverText.text = $"GAME OVER\n<size=50%>Reached ante {game.Ante}, wave {game.WaveInAnte}\nPress R to restart</size>";
-            }
-            if (gameOver.activeSelf && kb != null && kb.rKey.wasPressedThisFrame)
-            {
-                Enemy.All.Clear(); Tower.All.Clear(); BuffMachine.ResetAll();
-                SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex >= 0 ? SceneManager.GetActiveScene().name : "PokerTD");
-            }
+            if (game.Current == TDGame.Phase.GameOver && !gameOver.activeSelf) ShowGameOver(game);
+            if (gameOver.activeSelf && kb != null && kb.rKey.wasPressedThisFrame) Restart();
+        }
+
+        /// <summary>Game over (basic plan, Wong 2026-11-24): the dark screen fades in, GAME OVER drops in,
+        /// the level and wave reached, and a RESTART button (R works too).</summary>
+        void ShowGameOver(TDGame game)
+        {
+            gameOver.SetActive(true);
+            gameOver.transform.SetAsLastSibling();
+            var info = gameOver.transform.Find("Info")?.GetComponent<TMP_Text>();
+            if (info != null) { gameOverText.text = "GAME OVER"; info.text = $"YOU REACHED LEVEL {game.Ante}  ·  WAVE {game.WaveInAnte}\n<size=70%><color=#BBA88F>Press R or click Restart</color></size>"; }
+            else gameOverText.text = $"GAME OVER\n<size=50%>Reached level {game.Ante}, wave {game.WaveInAnte}\nPress R to restart</size>";
+            var restart = gameOver.transform.Find("Restart")?.GetComponent<Button>();
+            if (restart != null) { restart.onClick.RemoveAllListeners(); restart.onClick.AddListener(Restart); }
+            var group = gameOver.GetComponent<CanvasGroup>();
+            if (group == null) group = gameOver.AddComponent<CanvasGroup>();
+            group.alpha = 0f;
+            DOTween.To(() => group.alpha, a => group.alpha = a, 1f, 0.6f).SetUpdate(true).SetLink(gameOver);
+            var title = gameOverText.transform;
+            title.localScale = Vector3.one * 2.2f;
+            title.DOScale(1f, 0.45f).SetDelay(0.15f).SetEase(Ease.OutBack).SetUpdate(true).SetLink(gameOver);
+            Juice.Shake(0.5f);
+        }
+
+        void Restart()
+        {
+            Enemy.All.Clear(); Tower.All.Clear(); BuffMachine.ResetAll();
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex >= 0 ? SceneManager.GetActiveScene().name : "PokerTD");
         }
 
         /// <summary>Hovering a tower: its burst step by step (example hand: Pair), next to the pointer.</summary>
@@ -211,19 +213,37 @@ namespace PokerTD.UI
             var tower = BuildManager.Instance.HoveredTower;
             var game = TDGame.Instance;
             bool show = tower != null && (game.Current == TDGame.Phase.Deploy || game.Current == TDGame.Phase.Wave) && Pointer.current != null;
-            if (calcPanel.gameObject.activeSelf != show) calcPanel.gameObject.SetActive(show);
-            if (!show) return;
-            calcText.text = DamageCalc.Explain(tower, HandType.Pair);
-            Vector2 size = calcText.GetPreferredValues(calcText.text);
-            calcPanel.sizeDelta = new Vector2(size.x + 36f, size.y + 28f);
-            var canvas = GetComponent<Canvas>();
-            float scale = canvas != null ? canvas.scaleFactor : 1f;
-            Vector2 mouse = Pointer.current.position.ReadValue();
-            // keep the panel on screen
-            float w = calcPanel.sizeDelta.x * scale, h = calcPanel.sizeDelta.y * scale;
-            float x = mouse.x + 24f; if (x + w > Screen.width) x = mouse.x - 24f - w;
-            float y = mouse.y - 24f; if (y - h < 0f) y = h;
-            calcPanel.position = new Vector2(x, y);
+            if (calcPanel.gameObject.activeSelf) calcPanel.gameObject.SetActive(false);   // old panel: replaced by the shared tooltip
+            if (!show) { if (calcShown) { UiKit.HideTip(); calcShown = false; } return; }
+            // the same tooltip as the build cards (UiKit), Wong 2026-11-24
+            UiKit.ShowTip(DamageCalc.Explain(tower, HandType.Pair), Pointer.current.position.ReadValue());
+            calcShown = true;
+        }
+
+        /// <summary>The dark zones behind the tower cards and the hand fade out when the cards are hidden (wave, shop).</summary>
+        void FadeZones(bool show)
+        {
+            if (zones == null)
+            {
+                var list = new System.Collections.Generic.List<Image>();
+                foreach (var n in new[] { "TowerArea", "CardArea" })
+                {
+                    var t = transform.Find(n);
+                    var img = t != null ? t.GetComponent<Image>() : null;
+                    if (img != null) list.Add(img);
+                }
+                zones = list.ToArray();
+                zoneAlpha = new float[zones.Length];
+                for (int i = 0; i < zones.Length; i++) zoneAlpha[i] = zones[i].color.a;
+            }
+            for (int i = 0; i < zones.Length; i++)
+            {
+                var c = zones[i].color;
+                float goal = show ? zoneAlpha[i] : 0f;
+                if (Mathf.Approximately(c.a, goal)) continue;
+                c.a = Mathf.MoveTowards(c.a, goal, Time.unscaledDeltaTime * 3f * Mathf.Max(0.05f, zoneAlpha[i]));
+                zones[i].color = c;
+            }
         }
     }
 

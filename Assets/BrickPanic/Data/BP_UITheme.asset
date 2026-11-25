@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ac938a49912edda4f9000afb2684abc9, type: 3}
+  m_Name: BP_UITheme
+  m_EditorClassIdentifier: BrickPanic::BrickPanic.BPTheme
+  title: {fileID: 11400000, guid: 379fa25c5b2d01b40a6a4e948c0b231c, type: 2}
+  titleOutline: {fileID: 2100000, guid: 5ec18c58dfdce6f40b51d4fd50d2dbd3, type: 2}
+  number: {fileID: 11400000, guid: 401e8684f12e641439c0918e8b2c9949, type: 2}
+  numberOutline: {fileID: 2100000, guid: 30dd41284b939b94c90222ea26864580, type: 2}
+  panel: {fileID: 21300000, guid: 53e906b9aa744054e85851da2c67bb5e, type: 3}
+  pill: {fileID: 21300000, guid: 3a8df622a90b68742bb62cf3643122d3, type: 3}
+  button: {fileID: 21300000, guid: 705d5c3a8fded7844b2df0d0a90bd0e4, type: 3}
+  glow: {fileID: 21300000, guid: 9c617e9764f7a3f48895414966187e29, type: 3}
+  fill: {fileID: 21300000, guid: 46c5dd12a4e806d4ab59305355028881, type: 3}
+  money: {fileID: 21300000, guid: 24fbb394538d26849855ff0171277d6a, type: 3}
+  person: {fileID: 21300000, guid: 9cd390534aced1b4a9a3e49e3daf8130, type: 3}
+  goal: {fileID: 21300000, guid: 53a8be46d665fd144af024652cefc8c2, type: 3}
+  dead: {fileID: 21300000, guid: ba3def92f89118648974fd6e0bb2c512, type: 3}
+  wear: {fileID: 21300000, guid: 3717b1ca9050ffa47a021c4b7f7cc44e, type: 3}
+  people: {fileID: 21300000, guid: 05f7dfb9263599c459ac15b5e8f7515e, type: 3}
+  rubble: {fileID: 21300000, guid: 00bc1f3f367570545936e9e5b6d339ee, type: 3}
+  trophy: {fileID: 21300000, guid: a7fabc266d17a6144b50f7b677dae2c8, type: 3}
+  warning: {fileID: 21300000, guid: 6dc382cd5b8bdff4f9a9a3755f0ae6a1, type: 3}
+  restart: {fileID: 21300000, guid: 6c7349ef03468924a85fb4653e0af141, type: 3}
+  quake: {fileID: 21300000, guid: a4a063b6b21ac1a4aa54a92e3a0fcdd7, type: 3}
+  tsunami: {fileID: 21300000, guid: 268b2055971fe7943bf8c21e70ad45ba, type: 3}
+  volcano: {fileID: 21300000, guid: f2bb37c718bf8c74ea0733c64624eb62, type: 3}
+  tornado: {fileID: 21300000, guid: 7121005fe3aad0043a2110f06507ada5, type: 3}
+  lightning: {fileID: 21300000, guid: ba9cb3fa7939ea64bbd76909ad83794a, type: 3}
+  cream: {r: 1, g: 0.97, b: 0.9, a: 1}
+  ink: {r: 0.17, g: 0.13, b: 0.2, a: 1}
+  yellow: {r: 1, g: 0.8, b: 0.2, a: 1}
+  orange: {r: 1, g: 0.52, b: 0.2, a: 1}
+  red: {r: 1, g: 0.3, b: 0.3, a: 1}
+  green: {r: 0.3, g: 0.85, b: 0.5, a: 1}
+  blue: {r: 0.25, g: 0.6, b: 1, a: 1}
+  zone: {r: 0.12, g: 0.08, b: 0.16, a: 0.55}
+  quakeColor: {r: 1, g: 0.62, b: 0.2, a: 1}
+  tsunamiColor: {r: 0.25, g: 0.7, b: 1, a: 1}
+  volcanoColor: {r: 1, g: 0.32, b: 0.2, a: 1}
+  tornadoColor: {r: 0.55, g: 0.62, b: 0.7, a: 1}
+  lightningColor: {r: 0.62, g: 0.45, b: 1, a: 1}

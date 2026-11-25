@@ -54,6 +54,7 @@ namespace PokerTD.UI
         void Update()
         {
             var game = TDGame.Instance;
+            if (Shop3D.Instance != null) { if (panel.activeSelf) panel.SetActive(false); return; }   // the 3D shop replaces this panel
             bool show = game.Current == TDGame.Phase.Shop && !BoardTransition.Instance.Busy;
             panel.SetActive(show);
             if (!show) return;

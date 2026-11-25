@@ -23,6 +23,9 @@ namespace PokerTD
 
         readonly Deck deck = new Deck();
 
+        /// <summary>Cards left in the deck this turn (shown on the deck pile).</summary>
+        public int DeckCount => deck.Count;
+
         public void Deal(int count, int discards)
         {
             deck.Reset();
@@ -77,6 +80,27 @@ namespace PokerTD
             Selected.Clear();
             ApplySort();
             Changed?.Invoke();
+        }
+
+        /// <summary>Click-to-place: puts the leftmost selected card on the tower. The other selected
+        /// cards stay selected, so the player can click the next tower. Returns false without a selection.</summary>
+        public bool AssignFirstSelected(Tower tower)
+        {
+            if (Selected.Count == 0 || tower == null) return false;
+            int index = int.MaxValue;
+            foreach (int i in Selected) index = Math.Min(index, i);
+            if (index < 0 || index >= Cards.Count) return false;
+            var keep = new List<Card>();
+            foreach (int i in Selected) if (i != index && i < Cards.Count) keep.Add(Cards[i]);
+            var card = Cards[index];
+            Cards.RemoveAt(index);
+            if (tower.HasCard) Cards.Insert(index, tower.Card);
+            tower.SetCard(card);
+            ApplySort();
+            Selected.Clear();
+            foreach (var c in keep) { int j = Cards.IndexOf(c); if (j >= 0) Selected.Add(j); }
+            Changed?.Invoke();
+            return true;
         }
 
         /// <summary>Sorts the hand by rank (A high first) or by suit (then rank), and keeps

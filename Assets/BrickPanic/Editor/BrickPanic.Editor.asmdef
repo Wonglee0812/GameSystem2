@@ -1,0 +1,19 @@
+{
+    "name": "BrickPanic.Editor",
+    "rootNamespace": "BrickPanic.EditorTools",
+    "references": [
+        "BrickPanic",
+        "Unity.TextMeshPro",
+        "UnityEngine.UI",
+        "Unity.InputSystem",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": false,
+    "noEngineReferences": false
+}

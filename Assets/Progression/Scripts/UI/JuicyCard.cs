@@ -1,0 +1,161 @@
+using System;
+using DG.Tweening;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
+using UnityEngine.UI;
+
+namespace PokerTD.UI
+{
+    /// <summary>
+    /// A card-shaped UI button with the same Balatro feel as the hand (see CardView):
+    /// smooth move to its place with a swing, idle 3D wobble and bob, tilt towards the
+    /// pointer on hover, punch, shadow. Used for tower/machine cards and item cards.
+    /// The face is one image (art baked in), so the fake 3D tilt (CardPerspective) bends all of it.
+    /// Layers: root (hit box, position, swing) > Shake (scale + punch) > Shadow + Tilt > Face.
+    /// Extra children of the root (price tag) move with the card but do not tilt.
+    /// Works in Edit mode too (Poker TD/Build New HUD In Scene); the animation only runs in Play.
+    /// </summary>
+    public class JuicyCard : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
+    {
+        public float followSpeed = 16f;
+        public float rotationPerPixel = 0.12f;
+        public float maxSwing = 20f;
+        public float idleTilt = 7f;
+        public float idleSpeed = 1f;
+        public float idleBob = 2.5f;
+        public float hoverTilt = 0.3f;
+        public float maxHoverTilt = 22f;
+        public float tiltSpeed = 14f;
+        public float hoverScale = 1.1f;
+        public float hoverPunch = 5f;
+        public Vector2 shadowRest = new Vector2(3f, -10f);
+        public Vector2 shadowHover = new Vector2(5f, -18f);
+
+        [HideInInspector] public Vector2 restPosition;
+        [HideInInspector] public float restAngle;
+        [HideInInspector] public int phase;
+        [HideInInspector] public bool lifted;
+
+        public Action onClick, onRightClick;
+        public bool Hovering { get; private set; }
+        public RectTransform Rect => rt;
+
+        // layers, saved in the scene when the card is built in Edit mode
+        [SerializeField, HideInInspector] RectTransform shake, tilt, shadow;
+        [SerializeField, HideInInspector] Image face, shadowImage;
+        [SerializeField, HideInInspector] CardPerspective perspective;
+        RectTransform rt => (RectTransform)transform;
+        Vector2 currentTilt, smoothLag;
+        float swing;
+
+        public static JuicyCard Create(Transform parent, string name, Vector2 size, Sprite sprite)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+            var card = go.AddComponent<JuicyCard>();
+            card.Build(parent, size, sprite);
+            return card;
+        }
+
+        void Build(Transform parent, Vector2 size, Sprite sprite)
+        {
+            rt.SetParent(parent, false);
+            rt.sizeDelta = size;
+            var hit = GetComponent<Image>();
+            hit.color = new Color(1f, 1f, 1f, 0f);
+            shake = NewRect("Shake", rt);
+            shadow = NewRect("Shadow", shake);
+            shadowImage = shadow.gameObject.AddComponent<Image>();
+            shadowImage.color = new Color(0f, 0f, 0f, 0.42f);
+            shadowImage.raycastTarget = false;
+            shadow.anchoredPosition = shadowRest;
+            tilt = NewRect("Tilt", shake);
+            face = NewRect("Face", tilt).gameObject.AddComponent<Image>();
+            face.raycastTarget = false;
+            perspective = face.gameObject.AddComponent<CardPerspective>();
+            SetFace(sprite);
+        }
+
+        static RectTransform NewRect(string name, Transform parent)
+        {
+            var r = new GameObject(name, typeof(RectTransform)).GetComponent<RectTransform>();
+            r.SetParent(parent, false);
+            r.anchorMin = Vector2.zero; r.anchorMax = Vector2.one;
+            r.offsetMin = r.offsetMax = Vector2.zero;
+            return r;
+        }
+
+        public void SetFace(Sprite s) { face.sprite = s; shadowImage.sprite = s; }
+        public void SetTint(Color c) => face.color = c;
+
+        public void Punch(float angle = 6f)
+        {
+            DOTween.Kill(this, true);
+            shake.DOPunchRotation(Vector3.forward * angle, 0.2f, 20, 1f).SetId(this).SetUpdate(true).SetLink(gameObject);
+        }
+
+        /// <summary>Appears from nothing at its place with a bounce.</summary>
+        public void PopIn(float delay = 0f)
+        {
+            rt.anchoredPosition = restPosition + Vector2.down * 60f;
+            shake.localScale = Vector3.zero;
+            shake.DOScale(1f, 0.3f).SetDelay(delay).SetEase(Ease.OutBack).SetUpdate(true).SetLink(gameObject);
+        }
+
+        void Update()
+        {
+            float dt = Time.unscaledDeltaTime;
+            Vector2 goal = restPosition + (lifted ? Vector2.up * 26f : Vector2.zero);
+            Vector2 pos = Vector2.Lerp(rt.anchoredPosition, goal, 1f - Mathf.Exp(-followSpeed * dt));
+            rt.anchoredPosition = pos;
+            Vector2 lag = pos - goal;
+            smoothLag = Vector2.Lerp(smoothLag, lag, 1f - Mathf.Exp(-25f * dt));
+            swing = Mathf.Lerp(swing, Mathf.Clamp(lag.x * rotationPerPixel, -maxSwing, maxSwing), 1f - Mathf.Exp(-20f * dt));
+            rt.localRotation = Quaternion.Euler(0f, 0f, restAngle + swing);
+
+            float t = Time.unscaledTime * idleSpeed + phase * 1.7f;
+            float idle = Hovering ? 0.2f : 1f;
+            float tx = Mathf.Sin(t) * idleTilt * idle, ty = Mathf.Cos(t * 0.9f) * idleTilt * idle;
+            if (Hovering && Mouse.current != null &&
+                RectTransformUtility.ScreenPointToLocalPointInRectangle(rt, Mouse.current.position.ReadValue(), null, out Vector2 local))
+            {
+                tx += Mathf.Clamp(local.y * hoverTilt, -maxHoverTilt, maxHoverTilt);
+                ty += Mathf.Clamp(-local.x * hoverTilt, -maxHoverTilt, maxHoverTilt);
+            }
+            currentTilt = Vector2.Lerp(currentTilt, new Vector2(tx, ty), 1f - Mathf.Exp(-tiltSpeed * dt));
+            perspective.SetTilt(currentTilt);
+            float bob = Hovering ? 0f : Mathf.Sin(t * 1.3f) * idleBob;
+            tilt.anchoredPosition = new Vector2(0f, Mathf.Lerp(tilt.anchoredPosition.y, bob, 1f - Mathf.Exp(-8f * dt)));
+            shadow.anchoredPosition = Vector2.Lerp(shadow.anchoredPosition, Hovering || lifted ? shadowHover : shadowRest, 1f - Mathf.Exp(-15f * dt));
+        }
+
+        public void OnPointerEnter(PointerEventData e)
+        {
+            Hovering = true;
+            shake.DOScale(hoverScale, 0.15f).SetEase(Ease.OutBack).SetUpdate(true).SetLink(gameObject);
+            Punch(hoverPunch);
+        }
+
+        public void OnPointerExit(PointerEventData e)
+        {
+            Hovering = false;
+            shake.DOScale(1f, 0.15f).SetEase(Ease.OutBack).SetUpdate(true).SetLink(gameObject);
+            UiKit.HideTip();
+        }
+
+        public void OnPointerClick(PointerEventData e)
+        {
+            if (e.button == PointerEventData.InputButton.Right) { onRightClick?.Invoke(); Punch(10f); return; }
+            if (e.button != PointerEventData.InputButton.Left) return;
+            Punch(8f);
+            onClick?.Invoke();
+        }
+
+        void OnDisable()
+        {
+            if (Hovering) UiKit.HideTip();
+            Hovering = false;
+            if (shake != null) shake.localScale = Vector3.one;
+        }
+    }
+}

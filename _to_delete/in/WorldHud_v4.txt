@@ -1,0 +1,198 @@
+using DG.Tweening;
+using TMPro;
+using UnityEngine;
+
+namespace PokerTD.UI
+{
+    /// <summary>
+    /// Game information as 3D text lying on the table (world UI): LEVEL + WAVE, the sections
+    /// ECONOMY, HEALTH, BUILD, HAND, and COMBOS. Built into the scene by "Poker TD/Rebuild World HUD",
+    /// then placed by hand in the Editor (Wong, 2026-11-24). Without it, it is built at Play (fallback).
+    /// It is not part of the battle board, so it stays while the board sinks into the shop.
+    /// Numbers get a punch when they change.
+    /// </summary>
+    public class WorldHud : MonoBehaviour
+    {
+        [Header("Camera (set when the texts are built; Wong's view 2026-11-24)")]
+        public Vector3 cameraPosition = new Vector3(0.6f, 32.71f, -10.71f);
+        public Vector3 cameraEuler = new Vector3(65f, 0f, 0f);
+
+        [Header("Layout (used when building)")]
+        public Vector3 topBoardPosition = new Vector3(-9.5f, -0.23f, 11.73f);
+        public Vector3 rightBoardPosition = new Vector3(18f, 0f, 0f);
+        public Vector2 rightBoardSize = new Vector2(7.8f, 18.4f);
+        [Tooltip("COMBOS title, local to the right group (the list goes under it).")]
+        public Vector2 combosPosition = new Vector2(-7.5f, 12.62f);
+        [Tooltip("Word in front of the level number.")]
+        public string levelWord = "LEVEL";
+
+        [Header("Texts (filled by the builder; any of them may be deleted)")]
+        public TextMeshPro ante;
+        public TextMeshPro wave, hint, gold, lives, towers, machines, discards, deck, combos;
+        static readonly Color Text = new Color(0.98f, 0.93f, 0.82f);
+        static readonly Color Header = new Color(1f, 0.78f, 0.28f);
+
+        string lastAnte, lastWave, lastGold, lastLives, lastTowers, lastMachines, lastDiscards;
+
+        void Start()
+        {
+            if (transform.childCount == 0) Build();   // not built into the scene: build now (fallback)
+            ComboView.WorldTarget = combos;
+        }
+
+        void OnDestroy()
+        {
+            if (ComboView.WorldTarget == combos) ComboView.WorldTarget = null;
+        }
+
+        /// <summary>Builds the texts as children of this object and moves the camera. Works in Edit mode.
+        /// Layout by Wong (2026-11-24): no signboards; the texts lie flat on the table (rotation X 90):
+        /// LEVEL + WAVE top-left of the map, COMBOS top-right, the info sections on the right.</summary>
+        public void Build()
+        {
+            for (int i = transform.childCount - 1; i >= 0; i--) Kill(transform.GetChild(i).gameObject);
+            var cam = Camera.main;
+            if (cam != null)
+            {
+                cam.transform.position = cameraPosition;
+                cam.transform.eulerAngles = cameraEuler;
+            }
+
+            // top-left: level title and wave
+            var top = Flat("TopBoard", topBoardPosition, Vector3.zero);
+            ante = Label(top, "Ante", UiKit.Title, 11f, Header, new Vector2(0.5f, 0.75f), TextAlignmentOptions.Left, 10f);
+            ante.rectTransform.sizeDelta = new Vector2(10f, 2.5f);
+            wave = Label(top, "Wave", UiKit.Number, 9f, Text, new Vector2(0.5f, -1.25f), TextAlignmentOptions.Left, 10f);
+            wave.rectTransform.sizeDelta = new Vector2(10f, 2.5f);
+            ante.text = levelWord; wave.text = "WAVE 1 / 3";
+
+            // right: info sections; top-right: combos
+            var right = Flat("RightBoard", rightBoardPosition, new Vector3(0f, 0f, -0.18f));
+            float y = rightBoardSize.y * 0.5f - 0.6f;
+            float w = rightBoardSize.x - 0.8f;
+            Section(right, "ECONOMY", ref y, w);
+            gold = Row(right, "tokens_stack", UiKit.Gold, ref y, w, "GOLD  15");
+            Section(right, "HEALTH", ref y, w);
+            lives = Row(right, "suit_hearts", UiKit.Red, ref y, w, "LIVES  20");
+            Section(right, "BUILD", ref y, w);
+            towers = Row(right, "structure_tower", Text, ref y, w, "TOWERS  0/5");
+            machines = Row(right, "fire", new Color(0.6f, 0.85f, 1f), ref y, w, "MACHINES  0/5");
+            Section(right, "HAND", ref y, w);
+            discards = Row(right, "cards_fan", Text, ref y, w, "DISCARDS  3");
+            deck = Row(right, "cards_stack", Text, ref y, w, "DECK  44");
+            float cy = combosPosition.y;
+            Section(right, "COMBOS", ref cy, w).rectTransform.localPosition = new Vector3(combosPosition.x, combosPosition.y, 0f);
+            combos = Label(right, "Combos", UiKit.Number, 3.4f, Text, new Vector2(combosPosition.x, combosPosition.y - 1.82f), TextAlignmentOptions.TopLeft, w);
+            combos.rectTransform.sizeDelta = new Vector2(w, 2.9f);
+            combos.textWrappingMode = TextWrappingModes.Normal;   // the last line (best hand) is long
+            combos.richText = true;
+            combos.text = "COMBOS\nDrag cards onto towers.";
+        }
+
+        static void Kill(Object o)
+        {
+            if (Application.isPlaying) Destroy(o); else DestroyImmediate(o);
+        }
+
+        /// <summary>An empty group lying flat on the table (text faces up), with a Front child for the texts.</summary>
+        Transform Flat(string name, Vector3 position, Vector3 frontOffset)
+        {
+            var group = new GameObject(name).transform;
+            group.SetParent(transform, false);
+            group.position = position;
+            group.rotation = Quaternion.Euler(90f, 0f, 0f);
+            var front = new GameObject("Front").transform;
+            front.SetParent(group, false);
+            front.localPosition = frontOffset;
+            return front;
+        }
+
+        static TextMeshPro Label(Transform parent, string name, TMP_FontAsset font, float size, Color color, Vector2 pos, TextAlignmentOptions align, float width)
+        {
+            var t = new GameObject(name).AddComponent<TextMeshPro>();
+            t.transform.SetParent(parent, false);
+            t.rectTransform.sizeDelta = new Vector2(width, size * 0.12f);
+            t.rectTransform.localPosition = new Vector3(pos.x, pos.y, 0f);
+            t.rectTransform.localRotation = Quaternion.identity;   // the board's +Z points away from the camera
+            UiKit.SetFont(t, font, 0.18f);
+            t.fontSize = size;
+            t.color = color;
+            t.alignment = align;
+            t.textWrappingMode = TextWrappingModes.NoWrap;
+            return t;
+        }
+
+        static TextMeshPro Section(Transform board, string title, ref float y, float width)
+        {
+            y -= 0.12f;
+            var t = Label(board, title, UiKit.Title, 3.6f, Header, new Vector2(0f, y), TextAlignmentOptions.Left, width);
+            t.fontStyle = FontStyles.UpperCase;
+            t.text = title;
+            y -= 0.72f;
+            return t;
+        }
+
+        static TextMeshPro Row(Transform board, string icon, Color iconColor, ref float y, float width, string sample)
+        {
+            var sprite = UiKit.Icon(icon);
+            if (sprite != null)
+            {
+                var go = new GameObject("Icon_" + icon);
+                go.transform.SetParent(board, false);
+                go.transform.localPosition = new Vector3(-width * 0.5f + 0.3f, y, 0f);
+                go.transform.localScale = Vector3.one * 0.36f;
+                var sr = go.AddComponent<SpriteRenderer>();
+                sr.sprite = sprite;
+                sr.color = iconColor;
+            }
+            var t = Label(board, "Row_" + icon, UiKit.Number, 5.2f, Text, new Vector2(0.45f, y), TextAlignmentOptions.Left, width - 0.9f);
+            t.text = sample;
+            y -= 0.6f;
+            return t;
+        }
+
+        void Update()
+        {
+            var game = TDGame.Instance;
+            if (game == null) return;
+            // every text is optional: Wong may delete the ones he does not want
+            Set(ante, ref lastAnte, $"{levelWord} {game.Ante}");
+            Set(wave, ref lastWave, $"WAVE {game.WaveInAnte} / {game.config.wavesPerAnte}");
+            if (hint != null) hint.text = Hint(game);
+            Set(gold, ref lastGold, $"GOLD  {game.Gold}");
+            Set(lives, ref lastLives, $"LIVES  {game.Lives}");
+            Set(towers, ref lastTowers, $"TOWERS  {Tower.All.Count}/{game.TowerLimit}");
+            Set(machines, ref lastMachines, $"MACHINES  {BuffMachine.All.Count}/{game.MachineLimit}{(game.MachineStock.Count > 0 ? $"  +{game.MachineStock.Count}" : "")}");
+            Set(discards, ref lastDiscards, $"DISCARDS  {game.Hand.DiscardsLeft}");
+            if (deck != null) deck.text = $"DECK  {game.Hand.DeckCount}";
+            bool fight = game.Current == TDGame.Phase.Deploy || game.Current == TDGame.Phase.Wave;
+            if (!fight && combos != null) combos.text = "<color=#BBA88F>Shown during the battle turn.</color>";
+        }
+
+        static string Hint(TDGame game)
+        {
+            if (game.PickingHandForItem >= 0) return "<color=#FFD860>PICK A HAND IN COMBOS (ESC CANCELS)</color>";
+            switch (game.Current)
+            {
+                case TDGame.Phase.Deploy:
+                    return game.CanStartWave ? "READY: PRESS START WAVE (SPACE)" : "<color=#FF9C7A>PUT A CARD ON A TOWER TO START</color>";
+                case TDGame.Phase.Wave: return "WAVE IN PROGRESS";
+                case TDGame.Phase.Shop: return "SHOP: BUY, THEN CONTINUE";
+                case TDGame.Phase.GameOver: return "<color=#FF7060>GAME OVER: PRESS R</color>";
+            }
+            return "";
+        }
+
+        /// <summary>Sets the text; a changed value gets a punch (not on the first frame).</summary>
+        static void Set(TextMeshPro t, ref string last, string value)
+        {
+            if (t == null || value == last) return;
+            bool first = last == null;
+            last = value;
+            t.text = value;
+            if (first) return;
+            t.transform.DOComplete();
+            t.transform.DOPunchScale(Vector3.one * 0.25f, 0.35f, 6, 0.8f).SetLink(t.gameObject);
+        }
+    }
+}

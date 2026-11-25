@@ -1,0 +1,80 @@
+using TMPro;
+using UnityEngine;
+
+namespace PokerTD
+{
+    /// <summary>
+    /// A flying card. It follows its target; on arrival it marks the target (gatling)
+    /// or every enemy in the blast circle (cannon). If the target dies first, it
+    /// still flies to the last known spot (a cannon shell can still hit others there).
+    /// </summary>
+    public class Projectile : MonoBehaviour
+    {
+        Tower from;
+        Card card;
+        Enemy target;
+        Vector3 lastPos;
+        float speed;
+        bool spin;   // cannonball and graybox card spin; bullets point at the target
+
+        public static void Fire(Tower tower, Enemy target, Material material)
+        {
+            var art = PTDArt.I;
+            bool cannon = tower.Type.kind == TDConfig.TowerKind.Cannon;
+            var ammo = art == null ? null : cannon ? art.cannonball : art.bullet;
+            GameObject go;
+            if (ammo != null)   // Kenney ammo
+            {
+                go = new GameObject(cannon ? "Cannonball" : "Bullet");
+                go.transform.position = tower.Muzzle;
+                PTDArt.Place(ammo, go.transform, Vector3.zero, 1.6f);
+            }
+            else   // graybox: a little playing card
+            {
+                go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                Destroy(go.GetComponent<Collider>());
+                go.name = "CardShot";
+                go.transform.position = tower.transform.position + Vector3.up * 1f;
+                go.transform.localScale = new Vector3(0.3f, 0.04f, 0.42f);
+                var r = go.GetComponent<Renderer>();
+                r.sharedMaterial = material;
+                var block = new MaterialPropertyBlock();
+                block.SetColor("_BaseColor", new Color(0.98f, 0.95f, 0.88f));
+                r.SetPropertyBlock(block);
+            }
+            var p = go.AddComponent<Projectile>();
+            p.spin = ammo == null || cannon;
+            p.from = tower;
+            p.card = tower.Card;
+            p.target = target;
+            p.lastPos = target.transform.position;
+            p.speed = tower.Type.projectileSpeed;
+        }
+
+        void Update()
+        {
+            if (target != null) lastPos = target.transform.position;
+            Vector3 to = lastPos - transform.position;
+            float step = speed * Time.deltaTime;
+            if (spin) transform.Rotate(0f, 720f * Time.deltaTime, 0f, Space.World);
+            else if (to.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.LookRotation(to);
+            if (to.magnitude > step) { transform.position += to.normalized * step; return; }
+            Hit();
+        }
+
+        void Hit()
+        {
+            if (from != null && from.Type.kind == TDConfig.TowerKind.Cannon)
+            {
+                foreach (var e in Enemy.All.ToArray())
+                {
+                    Vector3 d = e.transform.position - lastPos; d.y = 0f;
+                    if (d.magnitude <= from.Type.areaRadius) e.Marks.AddMark(card, from);
+                }
+                Blast.Show(lastPos, from.Type.areaRadius);
+            }
+            else if (target != null) target.Marks.AddMark(card, from);
+            Destroy(gameObject);
+        }
+    }
+}

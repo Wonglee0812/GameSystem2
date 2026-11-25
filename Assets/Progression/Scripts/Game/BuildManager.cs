@@ -36,10 +36,19 @@ namespace PokerTD
 
         void Awake() => Instance = this;
 
-        public void Select(int index) => Selected = Selected == index ? -1 : index;
+        public void Select(int index)
+        {
+            Selected = Selected == index ? -1 : index;
+            // one selection at a time: picking a tower/machine card drops the selected poker cards (Wong, 2026-11-24)
+            if (Selected >= 0 && TDGame.Instance != null) TDGame.Instance.Hand.Selected.Clear();
+        }
+
+        /// <summary>No tower/machine card selected (a poker card was picked).</summary>
+        public void Deselect() => Selected = -1;
 
         static readonly Key[] DigitKeys = { Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5, Key.Digit6, Key.Digit7, Key.Digit8, Key.Digit9 };
 
+        // left clicks on the board count on release without a drag (CameraDragPan), so dragging the camera never builds
         void Update()
         {
             var kb = Keyboard.current;
@@ -67,6 +76,7 @@ namespace PokerTD
             }
             UpdatePreview();
             UpdateRings();
+            MachineTip();
             var game = TDGame.Instance;
             if (MachineSelected && StockIndex >= game.MachineStock.Count) Selected = -1;
             if (hovered == null || game.Current != TDGame.Phase.Deploy) return;
@@ -75,6 +85,7 @@ namespace PokerTD
             {
                 var t = hovered.tower;
                 int back = Mathf.Max(1, Mathf.FloorToInt(t.Type.cost * config.sellBack));
+                if (UI.HandView.Instance != null) UI.HandView.Instance.NoteReturnFrom(t);
                 game.Hand.TakeBack(t);   // its card goes back to the hand
                 game.AddGold(back);
                 FloatText.Show($"+{back} gold", t.transform.position + Vector3.up * 2f, new Color(1f, 0.85f, 0.3f));
@@ -85,17 +96,18 @@ namespace PokerTD
             }
             if (hovered.machine != null && mouse != null && mouse.rightButton.wasPressedThisFrame)
             {
-                var m = hovered.machine;
-                game.AddGold(game.SellValue(m.Type));
-                FloatText.Show($"+{game.SellValue(m.Type)} gold", m.transform.position + Vector3.up * 2f, new Color(1f, 0.85f, 0.3f));
-                hovered.machine = null;
-                BuffMachine.All.Remove(m);
-                Destroy(m.gameObject);
+                ReturnMachine(hovered);
                 return;
             }
             if (Selected < 0)
             {
-                if (hovered.tower != null && pointer.press.wasPressedThisFrame) game.Hand.TakeBack(hovered.tower);
+                if (hovered.tower != null && CameraDragPan.Clicked)
+                {
+                    // selected card(s) in the hand: give the first one to this tower; else take its card back
+                    var hand = UI.HandView.Instance;
+                    if (game.Hand.Selected.Count > 0 && hand != null) hand.AssignSelected(hovered.tower);
+                    else { if (hand != null) hand.NoteReturnFrom(hovered.tower); game.Hand.TakeBack(hovered.tower); }
+                }
                 return;
             }
 
@@ -104,7 +116,7 @@ namespace PokerTD
                 var buff = game.MachineStock[StockIndex];
                 bool okM = hovered.IsFree && !hovered.isPath && game.CanPlaceMachine;
                 hovered.Highlight(true, okM);
-                if (okM && pointer.press.wasPressedThisFrame)
+                if (okM && CameraDragPan.Clicked)
                 {
                     hovered.machine = BuffMachine.Build(buff, hovered.Top, material);
                     if (BoardTransition.Instance != null) hovered.machine.transform.SetParent(BoardTransition.Instance.board, true);
@@ -117,7 +129,7 @@ namespace PokerTD
             var type = config.towers[Selected];
             bool ok = hovered.IsFree && hovered.isPath == type.onPath && game.Gold >= type.cost && Tower.All.Count < game.TowerLimit;
             hovered.Highlight(true, ok);
-            if (ok && pointer.press.wasPressedThisFrame && game.TrySpend(type.cost))
+            if (ok && CameraDragPan.Clicked && game.TrySpend(type.cost))
             {
                 hovered.tower = Tower.Build(type, hovered.Top, material);
                 if (BoardTransition.Instance != null) hovered.tower.transform.SetParent(BoardTransition.Instance.board, true);
@@ -137,25 +149,98 @@ namespace PokerTD
             preview.transform.position = new Vector3(hovered.transform.position.x, 0.08f, hovered.transform.position.z);
         }
 
-        /// <summary>Which machine rings are visible this frame.</summary>
+        /// <summary>A placed machine goes back to the hand (stock) so it can be moved; it is sold from the hand
+        /// (Wong, 2026-11-24). It burns away on the board.</summary>
+        public void ReturnMachine(BuildNode node)
+        {
+            var m = node != null ? node.machine : null;
+            if (m == null) return;
+            TDGame.Instance.MachineStock.Add(m.Type);
+            FloatText.Show("Back to hand", m.transform.position + Vector3.up * 2f, new Color(0.6f, 0.85f, 1f));
+            node.machine = null;
+            BuffMachine.All.Remove(m);
+            m.transform.SetParent(null, true);
+            foreach (var t in m.GetComponentsInChildren<TMPro.TextMeshPro>()) t.gameObject.SetActive(false);
+            m.enabled = false;
+            if (ModelDissolve.Run(m.gameObject, 0f, 1f, 0.4f, true) == null) Destroy(m.gameObject);
+        }
+
+        bool machineTip;
+        /// <summary>Tooltip over a placed machine: what it does and that right-click moves it back to the hand.</summary>
+        void MachineTip()
+        {
+            var m = hovered != null ? hovered.machine : null;
+            var p = Pointer.current;
+            if (m == null || p == null || TDGame.Instance.Current != TDGame.Phase.Deploy && TDGame.Instance.Current != TDGame.Phase.Wave)
+            {
+                if (machineTip) { UI.UiKit.HideTip(); machineTip = false; }
+                return;
+            }
+            UI.UiKit.ShowTip($"<b>{m.Type.name.ToUpper()} MACHINE</b>\n<size=80%>{m.Type.Short} for the towers in its rings (ring 1 first).\n" +
+                             (TDGame.Instance.Current == TDGame.Phase.Deploy ? "Right-click: back to your hand, to move it." : "") + "</size>", p.position.ReadValue());
+            machineTip = true;
+        }
+
+        // ---------- buff machine rings shown on the tiles (Wong, 2026-11-24) ----------
+        BuildNode[] nodes;
+        Vector3? ringCentre;
+        float ringStart;
+        static readonly Color[] RingColors =
+        {
+            new Color(1f, 0.85f, 0.25f, 0.55f), new Color(1f, 0.5f, 0.2f, 0.5f),  new Color(0.95f, 0.3f, 0.5f, 0.45f),
+            new Color(0.65f, 0.35f, 0.95f, 0.42f), new Color(0.3f, 0.55f, 1f, 0.38f), new Color(0.3f, 0.85f, 0.9f, 0.35f),
+        };
+        [Header("Machine rings on the tiles (radar)")]
+        [Tooltip("How visible the ring tiles are between two waves (0 = invisible).")]
+        [Range(0f, 1f)] public float ringIdle = 0.12f;
+        [Tooltip("Seconds for one wave to go from the machine to the outer ring.")]
+        public float ringWaveTime = 1.1f;
+        [Tooltip("Pause between two waves (seconds).")]
+        public float ringWavePause = 0.35f;
+        [Tooltip("Width of the bright band of a wave (metres).")]
+        public float ringWaveWidth = 2.2f;
+
+        /// <summary>The ring tiles of a machine are almost invisible; a wave goes out from the machine to the
+        /// edge again and again, like a radar sweep, and lights the tiles up as it passes (Wong, 2026-11-24).
+        /// Shown when placing a machine (under the pointer), hovering a machine, or hovering a tower it reaches.</summary>
         void UpdateRings()
         {
             var game = TDGame.Instance;
-            bool placing = game.Current == TDGame.Phase.Deploy && MachineSelected;
-            var tower = HoveredTower;
-            foreach (var m in BuffMachine.All)
-            {
-                bool underPointer = hovered != null && hovered.machine == m;
-                bool reachesTower = tower != null && m.RingOf(tower.transform.position) > 0;
-                m.ShowRings(placing || underPointer || reachesTower, underPointer || reachesTower);
-            }
+            foreach (var m in BuffMachine.All) m.ShowRings(false, false);   // the old circles stay hidden
+            if (ringPreview != null) ringPreview.Show(false);
 
-            bool showPreview = placing && hovered != null && hovered.IsFree && !hovered.isPath;
-            if (!showPreview) { if (ringPreview != null) ringPreview.Show(false); return; }
-            if (ringPreview == null) ringPreview = RingGuide.Create(transform, new Color(1f, 1f, 1f, 0.95f));
-            ringPreview.Refresh(game.TowerLimit, config.ringWidth, config.ringOneIsInner);
-            ringPreview.Show(true);
-            ringPreview.transform.position = new Vector3(hovered.transform.position.x, RingGuide.Height, hovered.transform.position.z);
+            Vector3? centre = null;
+            bool fight = game.Current == TDGame.Phase.Deploy || game.Current == TDGame.Phase.Wave;
+            if (fight)
+            {
+                if (game.Current == TDGame.Phase.Deploy && MachineSelected && hovered != null && hovered.IsFree && !hovered.isPath)
+                    centre = hovered.transform.position;
+                else if (hovered != null && hovered.machine != null) centre = hovered.transform.position;
+                else if (HoveredTower != null)
+                    foreach (var m in BuffMachine.All)
+                        if (m.RingOf(HoveredTower.transform.position) > 0) { centre = m.transform.position; centre = new Vector3(centre.Value.x, 0f, centre.Value.z); break; }
+            }
+            if (centre.HasValue != ringCentre.HasValue || (centre.HasValue && Flat(centre.Value - ringCentre.Value) > 0.1f))
+            {
+                ringCentre = centre;
+                ringStart = Time.time;   // a new wave starts at once
+            }
+            if (nodes == null || nodes.Length == 0) nodes = FindObjectsByType<BuildNode>(FindObjectsSortMode.None);
+            float reach = game.TowerLimit * config.ringWidth;
+            float cycle = ringWaveTime + ringWavePause;
+            float front = ((Time.time - ringStart) % cycle) / ringWaveTime * (reach + ringWaveWidth);   // wave front distance
+            foreach (var n in nodes)
+            {
+                if (n == null) continue;
+                int k = centre.HasValue ? BuffMachine.RingAt(centre.Value, n.transform.position) : 0;
+                if (k <= 0) { n.SetRing(0, Color.clear); continue; }
+                float d = Flat(n.transform.position - centre.Value);
+                float x = (d - front) / ringWaveWidth;
+                float wave = front <= reach + ringWaveWidth ? Mathf.Exp(-x * x * 3f) : 0f;   // bright band around the front
+                n.SetRing(k, RingColors[Mathf.Min(k, RingColors.Length) - 1], Mathf.Lerp(ringIdle, 1f, wave));
+            }
         }
+
+        static float Flat(Vector3 v) { v.y = 0f; return v.magnitude; }
     }
 }

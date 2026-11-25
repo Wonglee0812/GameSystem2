@@ -15,34 +15,62 @@ namespace PokerTD
         Enemy target;
         Vector3 lastPos;
         float speed;
+        Vector3 flat;        // position on the straight line; the arc is added on top
+        float travelled, arc;
+        bool spin;   // cannonball and graybox card spin; bullets point at the target
 
         public static void Fire(Tower tower, Enemy target, Material material)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            Destroy(go.GetComponent<Collider>());
-            go.name = "CardShot";
-            go.transform.position = tower.transform.position + Vector3.up * 1f;
-            go.transform.localScale = new Vector3(0.3f, 0.04f, 0.42f);   // a little playing card
-            var r = go.GetComponent<Renderer>();
-            r.sharedMaterial = material;
-            var block = new MaterialPropertyBlock();
-            block.SetColor("_BaseColor", new Color(0.98f, 0.95f, 0.88f));
-            r.SetPropertyBlock(block);
+            var art = PTDArt.I;
+            bool cannon = tower.Type.kind == TDConfig.TowerKind.Cannon;
+            var ammo = art == null ? null : cannon ? art.cannonball : art.bullet;
+            GameObject go;
+            if (ammo != null)   // Kenney ammo
+            {
+                go = new GameObject(cannon ? "Cannonball" : "Bullet");
+                go.transform.position = tower.Muzzle;
+                PTDArt.Place(ammo, go.transform, Vector3.zero, cannon ? 2.4f : 2.0f);   // bigger, easier to follow
+                Juice.DecorateShot(go, cannon);
+            }
+            else   // graybox: a little playing card
+            {
+                go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                Destroy(go.GetComponent<Collider>());
+                go.name = "CardShot";
+                go.transform.position = tower.transform.position + Vector3.up * 1f;
+                go.transform.localScale = new Vector3(0.3f, 0.04f, 0.42f);
+                var r = go.GetComponent<Renderer>();
+                r.sharedMaterial = material;
+                var block = new MaterialPropertyBlock();
+                block.SetColor("_BaseColor", new Color(0.98f, 0.95f, 0.88f));
+                r.SetPropertyBlock(block);
+            }
             var p = go.AddComponent<Projectile>();
+            p.spin = ammo == null || cannon;
             p.from = tower;
             p.card = tower.Card;
             p.target = target;
             p.lastPos = target.transform.position;
             p.speed = tower.Type.projectileSpeed;
+            p.flat = go.transform.position;
+            if (cannon) p.arc = Juice.ArcHeight(Vector3.Distance(p.flat, p.lastPos));
         }
 
         void Update()
         {
             if (target != null) lastPos = target.transform.position;
-            Vector3 to = lastPos - transform.position;
+            Vector3 to = lastPos - flat;
             float step = speed * Time.deltaTime;
-            transform.Rotate(0f, 720f * Time.deltaTime, 0f, Space.World);
-            if (to.magnitude > step) { transform.position += to.normalized * step; return; }
+            if (spin) transform.Rotate(0f, 720f * Time.deltaTime, 0f, Space.World);
+            else if (to.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.LookRotation(to);
+            if (to.magnitude > step)
+            {
+                flat += to.normalized * step;
+                travelled += step;
+                float k = travelled / (travelled + to.magnitude);   // 0 at the tower, 1 at the target
+                transform.position = flat + Vector3.up * (arc * 4f * k * (1f - k));   // cannonball arc (juice)
+                return;
+            }
             Hit();
         }
 
@@ -56,6 +84,7 @@ namespace PokerTD
                     if (d.magnitude <= from.Type.areaRadius) e.Marks.AddMark(card, from);
                 }
                 Blast.Show(lastPos, from.Type.areaRadius);
+                Juice.CannonLanded(lastPos, from.Type.areaRadius);
             }
             else if (target != null) target.Marks.AddMark(card, from);
             Destroy(gameObject);

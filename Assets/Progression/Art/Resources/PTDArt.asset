@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 63a363fe6fbaa7d49b50705efe3d617f, type: 3}
+  m_Name: PTDArt
+  m_EditorClassIdentifier: PokerTD::PokerTD.PTDArt
+  cannonBase: {fileID: 919132149155446097, guid: e260ce725eef53f44ad272905d853c44, type: 3}
+  cannonWeapon: {fileID: 919132149155446097, guid: 9aecc255318e618418a64b8309d602b9, type: 3}
+  gatlingBase: {fileID: 919132149155446097, guid: b6323d89c745a7b41886b9cb1310a63f, type: 3}
+  gatlingTop: {fileID: 919132149155446097, guid: bb9ef6f4cca36bf4b8a0c44bbe7c1c4f, type: 3}
+  gatlingWeapon: {fileID: 919132149155446097, guid: 1451d7bb851743d468fdb827aba7a8ce, type: 3}
+  trapBase: {fileID: 919132149155446097, guid: 84b1ac892ab44f64cac188943aa601ea, type: 3}
+  trapWeapon: {fileID: 0}
+  spikeMaterial: {fileID: 2100000, guid: cd27795a14c92a542a5d925783699d52, type: 2}
+  machineBase: {fileID: 919132149155446097, guid: 2c3e1f148de9db94fa7786e7b491c129, type: 3}
+  machineCrystals: {fileID: 919132149155446097, guid: 93bf6fc856ef328458e2e24a1ad7110d, type: 3}
+  ufoNormal: {fileID: 919132149155446097, guid: f041bf0237b453c49874d79844fb28d4, type: 3}
+  ufoSpeed: {fileID: 919132149155446097, guid: 151f3a6dddfe1504b8bd16231a72bbce, type: 3}
+  ufoTank: {fileID: 919132149155446097, guid: ad08b1a513a3d8b4f9456e47685acfdf, type: 3}
+  ufoBoom: {fileID: 919132149155446097, guid: 5cce05cd2f12ae84d835a6a4d221443d, type: 3}
+  cannonball: {fileID: 919132149155446097, guid: f276effbb2a5edd43ab63c90791e65ad, type: 3}
+  bullet: {fileID: 919132149155446097, guid: 80379cb8a0a3f5d408e58c8644176621, type: 3}

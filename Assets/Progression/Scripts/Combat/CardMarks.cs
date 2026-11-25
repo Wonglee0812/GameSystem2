@@ -24,6 +24,12 @@ namespace PokerTD
         Tower lastTower;
         float timer;
         TextMeshPro text;
+        MarkRow row;   // the small card sprites above the head
+        float lockedUntil;
+
+        /// <summary>Seconds after a burst in which no new card can mark this enemy (the burst animation
+        /// is still playing; a card added then looked like part of the old hand). Hits still do damage.</summary>
+        public const float BurstLock = 0.6f;
         Transform timerBar;
 
         public void Init(Enemy owner, Transform head)
@@ -38,13 +44,15 @@ namespace PokerTD
             text.rectTransform.sizeDelta = new Vector2(3f, 0.5f);
             text.textWrappingMode = TextWrappingModes.NoWrap;
             text.fontStyle = FontStyles.Bold;
+            text.enabled = false;   // the cards are shown as sprites now (MarkRow)
+            row = MarkRow.Create(head, Vector3.up * 0.55f);
             var bar = GameObject.CreatePrimitive(PrimitiveType.Quad);
             Destroy(bar.GetComponent<Collider>());
             bar.name = "MarkTimer";
             bar.transform.SetParent(head, false);
             bar.transform.localPosition = new Vector3(0f, 0.12f, 0f);
             var r = bar.GetComponent<Renderer>();
-            r.sharedMaterial = GetComponent<Renderer>().sharedMaterial;
+            r.sharedMaterial = enemy.BarMaterial;
             var block = new MaterialPropertyBlock();
             block.SetColor("_BaseColor", new Color(1f, 0.85f, 0.3f));
             r.SetPropertyBlock(block);
@@ -56,11 +64,14 @@ namespace PokerTD
         {
             if (enemy == null || enemy.Health <= 0f) return;
             var config = TDGame.Instance.config;
+            Juice.CardHit(enemy, card);
             enemy.TakeDamage(card.Value);              // the hit itself
             if (enemy == null || enemy.Health <= 0f) return;
+            if (Time.time < lockedUntil) return;       // burst still playing: no new marks
             if (cards.Contains(card))
             {
                 if (config.sameCardResetsTimer) timer = config.WaitAfter(cards.Count);   // old rule
+                row.Hit(card);
                 return;   // same card: no new mark, the burst timer keeps running
             }
             cards.Add(card);
@@ -80,6 +91,7 @@ namespace PokerTD
             timer -= Time.deltaTime;
             float full = TDGame.Instance.config.WaitAfter(cards.Count);
             timerBar.localScale = new Vector3(1.14f * Mathf.Clamp01(timer / full), 0.05f, 1f);
+            row.SetUrgency(1f - Mathf.Clamp01(timer / full));
             if (timer <= 0f) Burst();
         }
 
@@ -90,8 +102,12 @@ namespace PokerTD
         {
             var hand = HandEvaluator.Evaluate(cards);
             var result = DamageCalc.Burst(hand, lastTower);
-            FloatText.Show($"{HandEvaluator.Name(result.hand)}\n<size=80%>{result.damage:#,0}</size>",
-                           transform.position + Vector3.up * 2.4f, HandColor(result.hand));
+            if (!Juice.Burst(transform.position, result, cards))   // juice shows chips x mult itself
+                FloatText.Show($"{HandEvaluator.Name(result.hand)}\n<size=80%>{result.damage:#,0}</size>",
+                               transform.position + Vector3.up * 2.4f, HandColor(result.hand));
+            row.Sync(cards);   // the card that caused the burst gets its sprite first, so the whole hand bursts
+            row.BurstAll();
+            lockedUntil = Time.time + BurstLock;
             cards.Clear();
             Refresh();
             enemy.TakeDamage(result.damage);
@@ -103,7 +119,14 @@ namespace PokerTD
             var parts = new string[cards.Count];
             for (int i = 0; i < cards.Count; i++) parts[i] = cards[i].Rich;
             text.text = string.Join(" ", parts);
+            if (row != null) row.Sync(cards);
             timerBar.gameObject.SetActive(cards.Count > 0);
+        }
+
+        /// <summary>The enemy is gone: its card sprites burn away on their own.</summary>
+        void OnDestroy()
+        {
+            if (row != null) row.Release();
         }
 
         static Color HandColor(HandType hand) =>
